@@ -16,7 +16,7 @@ import {
 
 // --- 시스템 구성 상수 (보안 처리 완료: Vercel 환경변수 연동) ---
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY; 
-const MODEL_NAME = "gemini-2.0-flash";
+const MODEL_NAME = "gemini-1.5-flash";
 
 // .env에서 비밀번호를 가져와 배열로 변환 (유출 방지)
 const rawPasswords = import.meta.env.VITE_VALID_PASSWORDS || "";
