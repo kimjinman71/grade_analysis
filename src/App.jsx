@@ -27,8 +27,8 @@ import {
 
 // --- 시스템 구성 상수 ---
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ""; 
-// 속도와 안정성이 가장 뛰어난 정식 모델로 적용 (API 한도 초과 방지)
-const MODEL_NAME = "gemini-1.5-flash";
+// 정밀한 표 분석 및 계산 논리 수행 능력이 가장 뛰어난 최상위 모델 적용
+const MODEL_NAME = "gemini-1.5-pro";
 
 const VALID_PASSWORDS = import.meta.env.VITE_VALID_PASSWORDS 
   ? import.meta.env.VITE_VALID_PASSWORDS.split(',').map(p => p.trim())
@@ -262,7 +262,6 @@ const App = () => {
     try {
       const { data: base64Data, mimeType } = await optimizeFile(file);
       
-      // 사용자 요청 100% 반영: 프롬프트 룰 유지 + JSON 오류 방지를 위한 형식 강제 지정
       const systemPrompt = `당신은 대한민국 고등학교 성적표(나이스 성적통지표) 분석 전문가입니다.
       첨부된 파일에서 성적 데이터를 전수 추출하여 JSON으로 반환하십시오.
       
@@ -275,39 +274,48 @@ const App = () => {
       6. A, B, C, D, E 성취도 비율분석에 해당하는 숫자를 정확하게 파싱을 해서 정확하게 매핑해주세요.
       7. 업로드된 파일에서 모든 데이터를 정확하게 파싱하고, 분석 및 파싱 속도를 가속화 해주세요.
       8. 정확한 파싱과 고속화된 파싱된 데이터를 정확하게 맵핑해주세요.
-      9. 누락 방지: 파일에 존재하는 모든 학년, 모든 학기의 성적을 단 하나도 빠짐없이 grades 배열에 담으십시오.
-      
-      [필수 JSON 출력 형식 - 이 구조를 반드시 지키세요]
-      {
-        "grades": [
-          {
-            "semester": "1학년 1학기",
-            "group": "국어",
-            "name": "국어",
-            "credits": 4,
-            "score": 95,
-            "mean": 65.2,
-            "achievement": "A",
-            "grade": 1,
-            "studentCount": 320,
-            "distA": 15.2,
-            "distB": 22.1,
-            "distC": 30.5,
-            "distD": 20.2,
-            "distE": 12.0
-          }
-        ]
-      }`;
+      9. 누락 방지: 파일에 존재하는 모든 학년, 모든 학기의 성적을 단 하나도 빠짐없이 grades 배열에 담으십시오.`;
 
       const prompt = "성적표 이미지 내 중국어 등 예외 교과 분류를 포함한 모든 데이터를 입시 전문가용 규격에 맞춰 전수 추출하십시오.";
 
+      // [핵심 변경 1] 파싱 오류를 원천 차단하는 완벽한 JSON Schema 적용
       const payload = {
         contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: mimeType, data: base64Data } }] }],
         systemInstruction: { parts: [{ text: systemPrompt }] },
         generationConfig: {
           temperature: 0.1, 
-          responseMimeType: "application/json" // 잦은 에러를 유발하는 responseSchema를 제거하고 순수 JSON 타입만 보장
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              grades: {
+                type: "ARRAY",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    semester: { type: "STRING" },
+                    group: { type: "STRING" },
+                    name: { type: "STRING" },
+                    credits: { type: "NUMBER" },
+                    score: { type: "NUMBER" },
+                    mean: { type: "NUMBER" },
+                    achievement: { type: "STRING" },
+                    grade: { type: "NUMBER", nullable: true },
+                    studentCount: { type: "NUMBER" },
+                    distA: { type: "NUMBER" },
+                    distB: { type: "NUMBER" },
+                    distC: { type: "NUMBER" },
+                    distD: { type: "NUMBER" },
+                    distE: { type: "NUMBER" }
+                  },
+                  required: ["semester", "group", "name", "credits", "achievement"]
+                }
+              }
+            },
+            required: ["grades"]
+          }
         },
+        // [핵심 변경 2] 유료 환경을 활용한 필터링 완화로 데이터 누락/응답 거부 방지
         safetySettings: [
           { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
           { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -316,58 +324,31 @@ const App = () => {
         ]
       };
 
-      const callApiWithRetry = async (retries = 0) => {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        
-        if (!response.ok) {
-          const errText = await response.text();
-          console.error(`API 통신 에러 (${response.status}):`, errText); // 개발자 디버깅용
-          // 429(Too Many Requests) 또는 500 이상의 서버 에러일 때만 지연 후 재시도
-          if ((response.status === 429 || response.status >= 500) && retries < 2) {
-            const delay = Math.pow(2, retries) * 1000;
-            await new Promise(res => setTimeout(res, delay));
-            return callApiWithRetry(retries + 1);
-          }
-          throw new Error('서버 응답 오류 발생');
-        }
-        return await response.json();
-      };
-
-      const result = await callApiWithRetry();
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error("API 통신 실패 (상세 내용):", errText);
+        throw new Error('데이터 추출 서버 응답 지연 또는 통신 실패입니다.');
+      }
+      
+      const result = await response.json();
       let rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
       
       if (!rawText) throw new Error('추출된 데이터 응답이 비어 있습니다.');
       
-      let cleanedText = rawText.trim().replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim();
-
-      let rawGrades = [];
-      try {
-        const parsedData = JSON.parse(cleanedText);
-        rawGrades = parsedData.grades || [];
-      } catch (e) {
-        const objectPattern = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g;
-        const matches = cleanedText.match(objectPattern);
-        if (matches) {
-          matches.forEach(m => {
-            try {
-              let safeObj = m;
-              if (safeObj.split('{').length > safeObj.split('}').length) safeObj += '}'.repeat(safeObj.split('{').length - safeObj.split('}').length);
-              const obj = JSON.parse(safeObj);
-              if (obj.name || obj.semester) rawGrades.push(obj);
-            } catch (innerE) {}
-          });
-        }
-      }
+      const parsedData = JSON.parse(rawText);
+      const rawGrades = parsedData.grades || [];
 
       if (rawGrades.length > 0) {
-        // --- 강화된 지능형 시맨틱 매핑 및 입시 데이터 정규화 엔진 ---
+        // --- 강화된 지능형 시맨틱 매핑 및 입시 데이터 정규화 엔진 (계산식 보정 완료) ---
         const mappedGrades = rawGrades.map((item, index) => {
           const parseSafeNum = (val, def = 0) => {
-            if (val === null || val === undefined) return def;
+            if (val === null || val === undefined || val === '') return def;
             const clean = String(val).replace(/[^0-9.-]/g, '');
             const num = parseFloat(clean);
             return isNaN(num) ? def : num;
@@ -384,7 +365,7 @@ const App = () => {
           let subjName = String(item.name || '').trim();
           let grp = String(item.group || '').trim();
           
-          // 지능형 교과군 분류 (Heuristic Priority Mapping)
+          // 지능형 교과군 분류
           const otherCat = SUBJECT_CATEGORIES.find(c => c.id === '기타');
           const isOther = otherCat.keywords.some(k => subjName.includes(k));
           
@@ -440,7 +421,7 @@ const App = () => {
       }
     } catch (error) {
       console.error("Precision Parsing Error:", error);
-      // UI 및 글자 100% 유지 구문
+      // 사용자 요청 100% 동일 유지: 오류 메시지 통일
       setUploadStatus({ type: 'error', message: '데이터 추출 중 오류가 발생했습니다. 이미지 상태를 확인해 주세요.' });
     } finally {
       setIsAnalyzing(false);
