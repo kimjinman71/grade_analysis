@@ -27,7 +27,8 @@ import {
 
 // --- 시스템 구성 상수 (환경변수로 보안 처리) ---
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ""; 
-const MODEL_NAME = "gemini-2.5-flash-preview-09-2025";
+// 오류 원인 1 해결: 만료된 preview 모델 대신 가장 안정적인 정식 모델로 교체
+const MODEL_NAME = "gemini-1.5-flash";
 
 // .env에 입력된 비밀번호 목록을 배열로 변환
 const VALID_PASSWORDS = import.meta.env.VITE_VALID_PASSWORDS 
@@ -253,6 +254,13 @@ const App = () => {
     setIsAnalyzing(true);
     setUploadStatus({ type: 'info', message: '데이터 분석 시스템이 정밀 해독 중입니다...' });
 
+    // 오류 원인 2 해결: API 키 누락 여부를 먼저 체크하여 명확한 오류 전달
+    if (!apiKey) {
+      setUploadStatus({ type: 'error', message: '오류: API 키가 없습니다. .env 또는 Vercel 환경변수(VITE_GEMINI_API_KEY)를 세팅해주세요.' });
+      setIsAnalyzing(false);
+      return;
+    }
+
     try {
       const { data: base64Data, mimeType } = await optimizeFile(file);
       
@@ -327,7 +335,7 @@ const App = () => {
             await new Promise(res => setTimeout(res, delay));
             return callApiWithRetry(retries + 1);
           }
-          throw new Error('데이터 추출 서버 응답 지연');
+          throw new Error('데이터 추출 서버 응답 지연 또는 통신 실패입니다.');
         }
         return await response.json();
       };
@@ -435,6 +443,7 @@ const App = () => {
       }
     } catch (error) {
       console.error("Precision Parsing Error:", error);
+      // 기존 메시지 디자인과 글자 100% 유지 (사용자 요청)
       setUploadStatus({ type: 'error', message: '데이터 추출 중 오류가 발생했습니다. 이미지 상태를 확인해 주세요.' });
     } finally {
       setIsAnalyzing(false);
