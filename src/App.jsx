@@ -244,7 +244,7 @@ const App = () => {
     try {
       const { data: base64Data, mimeType } = await optimizeFile(file);
       
-      const systemInstruction = `당신은 대한민국 고등학교 성적표(나이스 성적통지표) 분석 전문가입니다.
+      const systemPrompt = `당신은 대한민국 고등학교 성적표(나이스 성적통지표) 분석 전문가입니다.
       첨부된 파일에서 성적 데이터를 전수 추출하여 JSON으로 반환하십시오.
       
       [데이터 추출 및 매핑 중요 규칙]
@@ -298,7 +298,7 @@ const App = () => {
 
       const payload = {
         contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: mimeType, data: base64Data } }] }],
-        systemInstruction: { parts: [{ text: systemInstruction }] },
+        systemInstruction: { parts: [{ text: systemPrompt }] },
         generationConfig: generationConfig
       };
 
