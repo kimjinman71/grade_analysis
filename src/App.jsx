@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 // --- 시스템 구성 상수 ---
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+const apiKey = "AIzaSy...여기에_발급받은_실제_API키를_직접_붙여넣으세요...";
 const MODEL_NAME = "gemini-1.5-flash";
 
 const VALID_PASSWORDS = [
