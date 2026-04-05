@@ -25,10 +25,9 @@ import {
   Table as TableIcon
 } from 'lucide-react';
 
-// --- 시스템 구성 상수 ---
+// --- 시스템 구성 상수 (보안 처리) ---
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ""; 
-// 정밀한 표 분석 및 계산 논리 수행 능력이 가장 뛰어난 최상위 모델 적용
-const MODEL_NAME = "gemini-1.5-pro";
+const MODEL_NAME = "gemini-1.5-pro"; // 유료 티어에서 가장 안정적인 모델
 
 const VALID_PASSWORDS = import.meta.env.VITE_VALID_PASSWORDS 
   ? import.meta.env.VITE_VALID_PASSWORDS.split(',').map(p => p.trim())
@@ -253,15 +252,10 @@ const App = () => {
     setIsAnalyzing(true);
     setUploadStatus({ type: 'info', message: '데이터 분석 시스템이 정밀 해독 중입니다...' });
 
-    if (!apiKey) {
-      setUploadStatus({ type: 'error', message: '오류: API 키가 없습니다. .env 또는 Vercel 환경변수(VITE_GEMINI_API_KEY)를 세팅해주세요.' });
-      setIsAnalyzing(false);
-      return;
-    }
-
     try {
       const { data: base64Data, mimeType } = await optimizeFile(file);
       
+      // 사용자 요청: systemPrompt 내용 100% 사용
       const systemPrompt = `당신은 대한민국 고등학교 성적표(나이스 성적통지표) 분석 전문가입니다.
       첨부된 파일에서 성적 데이터를 전수 추출하여 JSON으로 반환하십시오.
       
@@ -278,77 +272,64 @@ const App = () => {
 
       const prompt = "성적표 이미지 내 중국어 등 예외 교과 분류를 포함한 모든 데이터를 입시 전문가용 규격에 맞춰 전수 추출하십시오.";
 
-      // [핵심 변경 1] 파싱 오류를 원천 차단하는 완벽한 JSON Schema 적용
       const payload = {
         contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: mimeType, data: base64Data } }] }],
         systemInstruction: { parts: [{ text: systemPrompt }] },
         generationConfig: {
           temperature: 0.1, 
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "OBJECT",
-            properties: {
-              grades: {
-                type: "ARRAY",
-                items: {
-                  type: "OBJECT",
-                  properties: {
-                    semester: { type: "STRING" },
-                    group: { type: "STRING" },
-                    name: { type: "STRING" },
-                    credits: { type: "NUMBER" },
-                    score: { type: "NUMBER" },
-                    mean: { type: "NUMBER" },
-                    achievement: { type: "STRING" },
-                    grade: { type: "NUMBER", nullable: true },
-                    studentCount: { type: "NUMBER" },
-                    distA: { type: "NUMBER" },
-                    distB: { type: "NUMBER" },
-                    distC: { type: "NUMBER" },
-                    distD: { type: "NUMBER" },
-                    distE: { type: "NUMBER" }
-                  },
-                  required: ["semester", "group", "name", "credits", "achievement"]
-                }
-              }
-            },
-            required: ["grades"]
-          }
-        },
-        // [핵심 변경 2] 유료 환경을 활용한 필터링 완화로 데이터 누락/응답 거부 방지
-        safetySettings: [
-          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-        ]
+          responseMimeType: "application/json"
+        }
       };
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error("API 통신 실패 (상세 내용):", errText);
-        throw new Error('데이터 추출 서버 응답 지연 또는 통신 실패입니다.');
-      }
-      
-      const result = await response.json();
+      const callApiWithRetry = async (retries = 0) => {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+          if (retries < 3) {
+            const delay = Math.pow(2, retries) * 1000;
+            await new Promise(res => setTimeout(res, delay));
+            return callApiWithRetry(retries + 1);
+          }
+          throw new Error('API 서버 통신 중 오류가 발생했습니다.');
+        }
+        return await response.json();
+      };
+
+      const result = await callApiWithRetry();
       let rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
       
       if (!rawText) throw new Error('추출된 데이터 응답이 비어 있습니다.');
       
-      const parsedData = JSON.parse(rawText);
-      const rawGrades = parsedData.grades || [];
+      let cleanedText = rawText.trim().replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim();
+
+      let rawGrades = [];
+      try {
+        const parsedData = JSON.parse(cleanedText);
+        rawGrades = parsedData.grades || [];
+      } catch (e) {
+        const objectPattern = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g;
+        const matches = cleanedText.match(objectPattern);
+        if (matches) {
+          matches.forEach(m => {
+            try {
+              let safeObj = m;
+              if (safeObj.split('{').length > safeObj.split('}').length) safeObj += '}'.repeat(safeObj.split('{').length - safeObj.split('}').length);
+              const obj = JSON.parse(safeObj);
+              if (obj.name || obj.semester) rawGrades.push(obj);
+            } catch (innerE) {}
+          });
+        }
+      }
 
       if (rawGrades.length > 0) {
-        // --- 강화된 지능형 시맨틱 매핑 및 입시 데이터 정규화 엔진 (계산식 보정 완료) ---
+        // --- 강화된 지능형 시맨틱 매핑 및 입시 데이터 정규화 엔진 ---
         const mappedGrades = rawGrades.map((item, index) => {
           const parseSafeNum = (val, def = 0) => {
-            if (val === null || val === undefined || val === '') return def;
+            if (val === null || val === undefined) return def;
             const clean = String(val).replace(/[^0-9.-]/g, '');
             const num = parseFloat(clean);
             return isNaN(num) ? def : num;
@@ -365,7 +346,6 @@ const App = () => {
           let subjName = String(item.name || '').trim();
           let grp = String(item.group || '').trim();
           
-          // 지능형 교과군 분류
           const otherCat = SUBJECT_CATEGORIES.find(c => c.id === '기타');
           const isOther = otherCat.keywords.some(k => subjName.includes(k));
           
@@ -421,7 +401,6 @@ const App = () => {
       }
     } catch (error) {
       console.error("Precision Parsing Error:", error);
-      // 사용자 요청 100% 동일 유지: 오류 메시지 통일
       setUploadStatus({ type: 'error', message: '데이터 추출 중 오류가 발생했습니다. 이미지 상태를 확인해 주세요.' });
     } finally {
       setIsAnalyzing(false);
@@ -482,7 +461,6 @@ const App = () => {
 
     const relativeGrades = grades.filter(g => g.type === 'relative' && g.grade !== null && !isNaN(parseFloat(g.grade)) && parseFloat(g.grade) >= 1 && parseFloat(g.grade) <= 9);
     
-    // 계산 로직 완전 보존 (석차등급 가중 평균: (학점 * 석차등급)의 합 / 전체 학점)
     const calculateWeightedAvg = (items) => {
       if (!items || items.length === 0) return "-";
       let totalCredits = 0, weightedSum = 0, validCount = 0;
