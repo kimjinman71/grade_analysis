@@ -1,12 +1,23 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { 
   Plus, 
   Trash2, 
+  BarChart3, 
+  Calculator, 
+  BookOpen, 
   GraduationCap, 
+  TrendingUp, 
+  Download,
+  Info,
   FileUp, 
   Loader2, 
   CheckCircle2, 
   AlertCircle, 
+  Hash, 
+  Trophy, 
+  Users, 
+  Award, 
+  Percent, 
   Layers, 
   Lock, 
   Key, 
@@ -14,13 +25,12 @@ import {
   Table as TableIcon
 } from 'lucide-react';
 
-// --- 시스템 구성 상수 (보안 처리 완료: Vercel 환경변수 연동) ---
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY; 
+// --- 시스템 구성 상수 ---
+const apiKey = ""; 
 const MODEL_NAME = "gemini-2.5-flash-preview-09-2025";
 
-// .env에서 비밀번호를 가져와 배열로 변환 (유출 방지)
-const rawPasswords = import.meta.env.VITE_VALID_PASSWORDS || "";
-const VALID_PASSWORDS = rawPasswords.split(',').map(p => p.trim().toLowerCase());
+const VALID_PASSWORDS = [
+  "0000", "8405"];
 
 const SEMESTERS = [
   '1학년 1학기', '1학년 2학기', 
@@ -31,13 +41,13 @@ const SEMESTERS = [
 const YEARS = ['1학년', '2학년', '3학년'];
 
 const SUBJECT_CATEGORIES = [
-  { id: '국어', name: '국어', keywords: ['국어', '문학', '독서', '화법', '언어', '매체', '고전'], exclusions: ['중국어', '일본어', '외국어', '프랑스어', '스페인어', '독일어'] },
+  { id: '국어', name: '국어', keywords: ['국어', '문학', '독서', '화법', '언어', '매체', '고전'], exclusions: ['중국어', '일본어', '외국어'] },
   { id: '수학', name: '수학', keywords: ['수학', '대수', '미적', '확률', '기하', '통계', '해석'], exclusions: [] },
   { id: '영어', name: '영어', keywords: ['영어', '영미', '독해', '회화', '심화영어'], exclusions: [] },
   { id: '사회', name: '사회', keywords: ['사회', '윤리', '지리', '역사', '경제', '정치', '법', '세계사', '동아시아'], exclusions: [] },
   { id: '과학', name: '과학', keywords: ['과학', '물리', '화학', '생명', '지구', '융합'], exclusions: [] },
   { id: '한국사', name: '한국사', keywords: ['한국사'], exclusions: [] },
-  { id: '기타', name: '기타', keywords: ['중국어', '일본어', '한문', '제2외국어', '정보', '기술', '가정', '체육', '음악', '미술', '프랑스어', '독일어', '스페인어', '러시아어', '아랍어', '베트남어'], exclusions: [] }
+  { id: '기타', name: '기타', keywords: ['중국어', '일본어', '한문', '제2외국어', '정보', '기술', '가정', '체육', '음악', '미술'], exclusions: [] }
 ];
 
 const ACHIEVEMENTS = ['A', 'B', 'C', 'D', 'E'];
@@ -244,12 +254,12 @@ const App = () => {
     try {
       const { data: base64Data, mimeType } = await optimizeFile(file);
       
-      const systemPrompt = `당신은 대한민국 고등학교 성적표(나이스 성적통지표) 분석 전문가입니다.
+      const systemInstruction = `당신은 대한민국 고등학교 성적표(나이스 성적통지표) 분석 전문가입니다.
       첨부된 파일에서 성적 데이터를 전수 추출하여 JSON으로 반환하십시오.
       
       [데이터 추출 및 매핑 중요 규칙]
       1. 교과 분류 예외 처리: '중국어', '일본어', '프랑스어' 등 모든 외국어(어문) 교과는 '국어' 교과가 아닌 '기타' 교과(제2외국어)로 분류하십시오. '국어'는 오직 한국어 관련 교과만 해당합니다.
-      2. 구조적 해독: 이미지 내 표(Table)의 행(Row) 관계 파악하여 학기, 과목, 단위수, 원점수, 평균, 성취도, 석차등급을 한 쌍으로 묶으십시오.
+      2. 구조적 해독: 이미지 내 표(Table)의 행(Row) 관계를 파악하여 학기, 과목, 단위수, 원점수, 평균, 성취도, 석차등급을 한 쌍으로 묶으십시오.
       3. 수치 정규화: 모든 텍스트 단위를 완전히 제거하고 순수 숫자(Number)로만 출력하십시오.
       4. 등급(grade) 판정: 석차등급 칸에 숫자 1~9가 기재된 경우만 숫자로, 'P', '.', '-', '공란' 등 미산출 과목은 반드시 null로 출력하십시오.
       5. 학기 정규화: '1학년 1학기'와 같이 시스템 표준 명칭으로 통일하십시오.
@@ -298,7 +308,7 @@ const App = () => {
 
       const payload = {
         contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: mimeType, data: base64Data } }] }],
-        systemInstruction: { parts: [{ text: systemPrompt }] },
+        systemInstruction: { parts: [{ text: systemInstruction }] },
         generationConfig: generationConfig
       };
 
@@ -325,16 +335,13 @@ const App = () => {
       
       if (!rawText) throw new Error('추출된 데이터 응답이 비어 있습니다.');
       
-      // JSON 파싱 안정성 대폭 강화 (마크다운 포맷 제거)
-      let cleanedText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      let cleanedText = rawText.trim().replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim();
 
       let rawGrades = [];
       try {
         const parsedData = JSON.parse(cleanedText);
         rawGrades = parsedData.grades || [];
       } catch (e) {
-        // 정규식을 통한 강제 파싱 (데이터 유실 방지)
-        console.warn("JSON 파싱 오류, 정규식 복구 시도...");
         const objectPattern = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g;
         const matches = cleanedText.match(objectPattern);
         if (matches) {
@@ -370,7 +377,7 @@ const App = () => {
           let subjName = String(item.name || '').trim();
           let grp = String(item.group || '').trim();
           
-          // 지능형 교과군 분류 (Heuristic Priority Mapping) - 제외 과목 철저 반영
+          // 지능형 교과군 분류 (Heuristic Priority Mapping)
           const otherCat = SUBJECT_CATEGORIES.find(c => c.id === '기타');
           const isOther = otherCat.keywords.some(k => subjName.includes(k));
           
@@ -478,7 +485,6 @@ const App = () => {
     }]);
   }, []);
 
-  // --- 단위수 0 또는 잘못된 데이터에 의한 NaN(계산 불가) 에러 방지 강화 ---
   const analysis = useMemo(() => {
     const normalizeStr = (str) => String(str || '').replace(/\s+/g, '');
     const isMatchSem = (gSem, targetSem) => normalizeStr(gSem) === normalizeStr(targetSem);
@@ -491,9 +497,9 @@ const App = () => {
       if (!items || items.length === 0) return "-";
       let totalCredits = 0, weightedSum = 0, validCount = 0;
       for (const item of items) {
-          const c = parseFloat(item.credits);
-          const g = parseFloat(item.grade);
-          if (!isNaN(c) && !isNaN(g) && c > 0 && g >= 1 && g <= 9) {
+          const c = parseFloat(item.credits) || 0;
+          const g = parseFloat(item.grade) || 0;
+          if (c > 0 && g >= 1 && g <= 9) {
               totalCredits += c;
               weightedSum += (c * g);
               validCount++;
