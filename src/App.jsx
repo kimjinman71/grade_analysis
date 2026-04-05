@@ -27,7 +27,7 @@ import {
 
 // --- 시스템 구성 상수 ---
 const apiKey = ""; 
-const MODEL_NAME = "gemini-2.5-flash-preview-09-2025";
+const MODEL_NAME = "gemini-1.5-flash";
 
 const VALID_PASSWORDS = [
   "0000", "8405"];
