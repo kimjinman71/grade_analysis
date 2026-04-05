@@ -25,9 +25,9 @@ import {
   Table as TableIcon
 } from 'lucide-react';
 
-// --- 시스템 구성 상수 ---
+// --- 시스템 구성 상수 (환경변수 보안 적용) ---
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ""; 
-const MODEL_NAME = "gemini-1.5-pro"; // 유료 티어 전용 최상위 모델
+const MODEL_NAME = "gemini-1.5-pro"; // 유료 티어의 정밀 분석 최적화 모델
 
 const VALID_PASSWORDS = import.meta.env.VITE_VALID_PASSWORDS 
   ? import.meta.env.VITE_VALID_PASSWORDS.split(',').map(p => p.trim())
@@ -91,23 +91,38 @@ const optimizeFile = async (file) => {
   });
 };
 
-// --- GradeRow 컴포넌트 ---
+// --- GradeRow: 개별 교과 성적 행 컴포넌트 ---
 const GradeRow = React.memo(({ row, type, mode, updateRow, removeRow }) => {
   return (
     <tr className="hover:bg-slate-50/30 transition-colors group">
       <td className="px-6 py-4">
-        <select value={row.semester} onChange={(e) => updateRow(row.id, 'semester', e.target.value)} className="w-full bg-transparent border-none text-xs font-bold focus:ring-0 cursor-pointer">
+        <select 
+          value={row.semester} 
+          onChange={(e) => updateRow(row.id, 'semester', e.target.value)} 
+          className="w-full bg-transparent border-none text-xs font-bold focus:ring-0 cursor-pointer"
+        >
           {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
       </td>
       <td className="px-4 py-4">
-        <select value={row.group} onChange={(e) => updateRow(row.id, 'group', e.target.value)} className={`w-full bg-transparent border-none text-xs font-black ${type === 'relative' ? 'text-blue-700' : 'text-emerald-700'} focus:ring-0 cursor-pointer`}>
+        <select 
+          value={row.group} 
+          onChange={(e) => updateRow(row.id, 'group', e.target.value)} 
+          className={`w-full bg-transparent border-none text-xs font-black ${type === 'relative' ? 'text-blue-700' : 'text-emerald-700'} focus:ring-0 cursor-pointer`}
+        >
           {SUBJECT_CATEGORIES.map(g => <option key={g.id} value={g.id}>{g.id}</option>)}
         </select>
       </td>
       <td className="px-4 py-4">
-        <input type="text" value={row.name} placeholder="과목" onChange={(e) => updateRow(row.id, 'name', e.target.value)} className="w-full bg-slate-100/50 border-none rounded-xl p-2.5 text-xs font-bold focus:bg-white focus:ring-2 transition-all" />
+        <input 
+          type="text" 
+          value={row.name} 
+          placeholder="과목" 
+          onChange={(e) => updateRow(row.id, 'name', e.target.value)} 
+          className="w-full bg-slate-100/50 border-none rounded-xl p-2.5 text-xs font-bold focus:bg-white focus:ring-2 transition-all" 
+        />
       </td>
+
       {mode === 'basic' ? (
         <>
           <td className="px-4 py-4"><input type="number" value={row.credits || ''} onChange={(e) => updateRow(row.id, 'credits', Number(e.target.value))} className="w-16 mx-auto bg-slate-100/50 border-none rounded-lg p-2 text-xs text-center font-bold" /></td>
@@ -137,6 +152,7 @@ const GradeRow = React.memo(({ row, type, mode, updateRow, removeRow }) => {
           <td className="px-2 py-4 bg-indigo-50/20"><input type="number" step="0.1" value={row.distE || ''} onChange={(e) => updateRow(row.id, 'distE', Number(e.target.value))} className="w-12 mx-auto bg-transparent border-none text-xs text-center font-bold text-indigo-700" /></td>
         </>
       )}
+
       <td className="px-8 py-4 text-right">
         <button onClick={() => removeRow(row.id)} className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1"><Trash2 size={16} /></button>
       </td>
@@ -144,7 +160,6 @@ const GradeRow = React.memo(({ row, type, mode, updateRow, removeRow }) => {
   );
 });
 
-// --- TableSection 컴포넌트 ---
 const TableSection = React.memo(({ title, grades, type, mode, updateRow, removeRow, addRow }) => (
   <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden transition-all hover:shadow-md">
     <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-white/50 backdrop-blur-md">
@@ -198,11 +213,25 @@ const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [authError, setAuthError] = useState('');
+
   const [grades, setGrades] = useState([
-    { id: 1, type: 'relative', semester: '1학년 1학기', group: '국어', name: '국어', credits: 4, score: 95, mean: 65.2, achievement: 'A', grade: 1, studentCount: 320, distA: 15.2, distB: 22.1, distC: 30.5, distD: 20.2, distE: 12.0 },
-    { id: 2, type: 'relative', semester: '1학년 1학기', group: '수학', name: '수학', credits: 4, score: 98, mean: 58.7, achievement: 'A', grade: 1, studentCount: 320, distA: 10.5, distB: 18.2, distC: 25.4, distD: 28.1, distE: 17.8 },
-    { id: 3, type: 'absolute', semester: '1학년 1학기', group: '과학', name: '과학탐구실험', credits: 1, score: 92, mean: 88.5, achievement: 'A', grade: null, studentCount: 320, distA: 65.4, distB: 20.1, distC: 14.5, distD: 0, distE: 0 },
+    { 
+      id: 1, type: 'relative', semester: '1학년 1학기', group: '국어', name: '국어', 
+      credits: 4, score: 95, mean: 65.2, achievement: 'A', grade: 1, studentCount: 320,
+      distA: 15.2, distB: 22.1, distC: 30.5, distD: 20.2, distE: 12.0
+    },
+    { 
+      id: 2, type: 'relative', semester: '1학년 1학기', group: '수학', name: '수학', 
+      credits: 4, score: 98, mean: 58.7, achievement: 'A', grade: 1, studentCount: 320,
+      distA: 10.5, distB: 18.2, distC: 25.4, distD: 28.1, distE: 17.8
+    },
+    { 
+      id: 3, type: 'absolute', semester: '1학년 1학기', group: '과학', name: '과학탐구실험', 
+      credits: 1, score: 92, mean: 88.5, achievement: 'A', grade: null, studentCount: 320,
+      distA: 65.4, distB: 20.1, distC: 14.5, distD: 0, distE: 0
+    },
   ]);
+
   const [activeTab, setActiveTab] = useState('input');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [uploadStatus, setUploadStatus] = useState({ type: '', message: '' });
@@ -210,11 +239,15 @@ const App = () => {
 
   const handleAuth = (e) => {
     e?.preventDefault();
-    if (VALID_PASSWORDS.includes(passwordInput.toLowerCase())) { setIsAuthenticated(true); setAuthError(''); } 
-    else { setAuthError('유효하지 않은 보안 코드입니다. 전문가용 코드를 확인해 주세요.'); }
+    if (VALID_PASSWORDS.includes(passwordInput.toLowerCase())) {
+      setIsAuthenticated(true);
+      setAuthError('');
+    } else {
+      setAuthError('유효하지 않은 보안 코드입니다. 전문가용 코드를 확인해 주세요.');
+    }
   };
 
-  // --- 차세대 지능형 성적표 파싱 및 정밀 시맨틱 매핑 엔진 (v1beta 유료 최적화) ---
+  // --- 차세대 지능형 성적표 파싱 및 정밀 시맨틱 매핑 엔진 ---
   const analyzeFile = async (file) => {
     setIsAnalyzing(true);
     setUploadStatus({ type: 'info', message: '데이터 분석 시스템이 정밀 해독 중입니다...' });
@@ -223,7 +256,7 @@ const App = () => {
       const { data: base64Data, mimeType } = await optimizeFile(file);
       
       // 사용자 요청 100% 동일한 systemPrompt 내용 적용
-      const systemPrompt = `당신은 대한민국 고등학교 성적표(나이스 성적통지표) 분석 전문가입니다.
+      const systemPromptContent = `당신은 대한민국 고등학교 성적표(나이스 성적통지표) 분석 전문가입니다.
       첨부된 파일에서 성적 데이터를 전수 추출하여 JSON으로 반환하십시오.
       
       [데이터 추출 및 매핑 중요 규칙]
@@ -237,16 +270,12 @@ const App = () => {
       8. 정확한 파싱과 고속화된 파싱된 데이터를 정확하게 맵핑해주세요.
       9. 누락 방지: 파일에 존재하는 모든 학년, 모든 학기의 성적을 단 하나도 빠짐없이 grades 배열에 담으십시오.`;
 
-      // 유료 티어의 Safety Settings BLOCK_NONE 적용 및 v1beta 규격 통신
+      const prompt = "성적표 이미지 내 모든 데이터를 입시 전문가용 규격에 맞춰 전수 추출하십시오.";
+
+      // 유료 티어 최적화: Safety Settings를 BLOCK_NONE으로 설정하여 차단 원천 봉쇄
       const payload = {
-        contents: [{
-          role: "user",
-          parts: [
-            { text: "성적표 파일 내 모든 데이터를 JSON으로 정밀하게 추출하십시오." },
-            { inlineData: { mimeType: mimeType, data: base64Data } }
-          ]
-        }],
-        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType, data: base64Data } }] }],
+        systemInstruction: { parts: [{ text: systemPromptContent }] },
         generationConfig: {
           temperature: 0.1,
           responseMimeType: "application/json"
@@ -259,28 +288,46 @@ const App = () => {
         ]
       };
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const callApiWithRetry = async (retries = 0) => {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+          if (retries < 2) {
+            const delay = Math.pow(2, retries) * 1000;
+            await new Promise(res => setTimeout(res, delay));
+            return callApiWithRetry(retries + 1);
+          }
+          throw new Error('데이터 추출 서버 응답 지연');
+        }
+        return await response.json();
+      };
 
-      if (!response.ok) throw new Error(`API 응답 오류: ${response.status}`);
-
-      const result = await response.json();
-      const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      const result = await callApiWithRetry();
+      let rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
       
-      if (!rawText) throw new Error('추출된 데이터가 존재하지 않습니다.');
-
-      const parsedData = JSON.parse(rawText);
-      const rawGrades = parsedData.grades || [];
+      if (!rawText) throw new Error('추출된 데이터 응답이 비어 있습니다.');
+      
+      let rawGrades = [];
+      try {
+        const parsedData = JSON.parse(rawText);
+        rawGrades = parsedData.grades || [];
+      } catch (e) {
+        // Fallback 파싱 로직
+        const match = rawText.match(/\[.*\]/s);
+        if (match) rawGrades = JSON.parse(match[0]);
+      }
 
       if (rawGrades.length > 0) {
         const mappedGrades = rawGrades.map((item, index) => {
-          const num = (v, d = 0) => {
-            if (v === null || v === undefined || v === '') return d;
-            const n = parseFloat(String(v).replace(/[^0-9.-]/g, ''));
-            return isNaN(n) ? d : n;
+          const parseSafeNum = (val, def = 0) => {
+            if (val === null || val === undefined || val === '') return def;
+            const clean = String(val).replace(/[^0-9.-]/g, '');
+            const num = parseFloat(clean);
+            return isNaN(num) ? def : num;
           };
 
           let sem = String(item.semester || '').trim();
@@ -288,56 +335,58 @@ const App = () => {
           sem = semMatch ? `${semMatch[1]}학년 ${semMatch[2]}학기` : (SEMESTERS.find(s => s.replace(/\s/g, '').includes(sem.replace(/\s/g, ''))) || '1학년 1학기');
 
           const subj = String(item.name || '').trim();
-          const matchedGrp = SUBJECT_CATEGORIES.find(c => c.id !== '기타' && c.keywords.some(k => subj.includes(k)) && !c.exclusions.some(ex => subj.includes(ex)));
+          const grpText = String(item.group || '').trim();
+          const matchedGrp = SUBJECT_CATEGORIES.find(c => c.id !== '기타' && c.keywords.some(k => subj.includes(k) || grpText.includes(k)) && !c.exclusions.some(ex => subj.includes(ex)));
 
-          const gVal = num(item.grade, null);
-          const isRel = gVal !== null && gVal >= 1 && gVal <= 9;
+          const gVal = item.grade;
+          const isRelative = gVal !== null && !isNaN(parseInt(gVal)) && parseInt(gVal) >= 1 && parseInt(gVal) <= 9;
 
-          return {
+          return { 
             id: Date.now() + index + Math.random(),
-            type: isRel ? 'relative' : 'absolute',
+            type: isRelative ? 'relative' : 'absolute',
             semester: sem,
             group: matchedGrp ? matchedGrp.id : '기타',
             name: subj || '미상 과목',
-            credits: num(item.credits, 1),
-            score: num(item.score, 0),
-            mean: num(item.mean, 0),
+            credits: parseSafeNum(item.credits, 1),
+            score: parseSafeNum(item.score, 0),
+            mean: parseSafeNum(item.mean, 0),
             achievement: String(item.achievement || 'A').toUpperCase().charAt(0),
-            grade: isRel ? gVal : null,
-            studentCount: num(item.studentCount, 0),
-            distA: num(item.distA, 0), distB: num(item.distB, 0), distC: num(item.distC, 0), distD: num(item.distD, 0), distE: num(item.distE, 0)
+            grade: isRelative ? parseInt(gVal) : null,
+            studentCount: parseSafeNum(item.studentCount, 0),
+            distA: parseSafeNum(item.distA, 0), distB: parseSafeNum(item.distB, 0), distC: parseSafeNum(item.distC, 0), distD: parseSafeNum(item.distD, 0), distE: parseSafeNum(item.distE, 0)
           };
         });
 
         setGrades(mappedGrades);
         setUploadStatus({ type: 'success', message: `분석 완료: ${mappedGrades.length}개의 데이터가 전문가 리포트에 정밀 연동되었습니다.` });
       } else {
-        throw new Error('파싱된 결과가 비어 있습니다.');
+        throw new Error('성적표 구조를 인식할 수 없습니다.');
       }
     } catch (error) {
-      console.error("Analysis Error:", error);
+      console.error("Precision Parsing Error:", error);
       setUploadStatus({ type: 'error', message: '데이터 추출 중 오류가 발생했습니다. 이미지 상태를 확인해 주세요.' });
-    } finally { setIsAnalyzing(false); }
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
-    if (file && ["application/pdf", "image/jpeg", "image/png", "image/jpg"].includes(file.type)) analyzeFile(file);
+    if (file && ["application/pdf", "image/png", "image/jpeg", "image/jpg"].includes(file.type)) analyzeFile(file);
     else if (file) setUploadStatus({ type: 'error', message: '지원되지 않는 파일 형식입니다.' });
   };
 
-  // --- 기존 UI 유지용 로직 및 계산 엔진 ---
   const updateRow = useCallback((id, field, value) => {
     setGrades(prev => prev.map(g => {
-      if (g.id === id) {
-        const newRow = { ...g, [field]: value };
-        if (field === 'grade') {
-          const num = parseInt(value, 10);
-          newRow.type = (!isNaN(num) && num >= 1 && num <= 9) ? 'relative' : 'absolute';
+        if (g.id === id) {
+            const newRow = { ...g, [field]: value };
+            if (field === 'grade') {
+                const num = parseInt(value, 10);
+                newRow.type = (!isNaN(num) && num >= 1 && num <= 9) ? 'relative' : 'absolute';
+            }
+            return newRow;
         }
-        return newRow;
-      }
-      return g;
+        return g;
     }));
   }, []);
 
@@ -378,7 +427,9 @@ const App = () => {
         <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl overflow-hidden p-10 relative">
           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
           <div className="relative z-10 text-center">
-            <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-blue-200"><Lock className="text-white" size={40} /></div>
+            <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-blue-200">
+              <Lock className="text-white" size={40} />
+            </div>
             <h1 className="text-2xl font-black text-slate-800 mb-2">보안 코드 인증</h1>
             <p className="text-slate-500 text-sm font-medium mb-8">데이터 분석 시스템입니다.<br/>접근을 위해 보안 코드를 입력해 주세요.</p>
             <form onSubmit={handleAuth} className="space-y-4">
