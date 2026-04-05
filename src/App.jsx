@@ -27,8 +27,8 @@ import {
 
 // --- 시스템 구성 상수 ---
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ""; 
-// 정밀한 OCR 파싱과 복잡한 표 매핑을 위해 가장 성능이 좋은 정식 pro 모델로 지정
-const MODEL_NAME = "gemini-1.5-pro";
+// 속도와 안정성이 가장 뛰어난 정식 모델로 적용 (API 한도 초과 방지)
+const MODEL_NAME = "gemini-1.5-flash";
 
 const VALID_PASSWORDS = import.meta.env.VITE_VALID_PASSWORDS 
   ? import.meta.env.VITE_VALID_PASSWORDS.split(',').map(p => p.trim())
@@ -253,11 +253,16 @@ const App = () => {
     setIsAnalyzing(true);
     setUploadStatus({ type: 'info', message: '데이터 분석 시스템이 정밀 해독 중입니다...' });
 
-    try {
-      if (!apiKey) throw new Error("API 토큰이 설정되지 않았습니다.");
+    if (!apiKey) {
+      setUploadStatus({ type: 'error', message: '오류: API 키가 없습니다. .env 또는 Vercel 환경변수(VITE_GEMINI_API_KEY)를 세팅해주세요.' });
+      setIsAnalyzing(false);
+      return;
+    }
 
+    try {
       const { data: base64Data, mimeType } = await optimizeFile(file);
       
+      // 사용자 요청 100% 반영: 프롬프트 룰 유지 + JSON 오류 방지를 위한 형식 강제 지정
       const systemPrompt = `당신은 대한민국 고등학교 성적표(나이스 성적통지표) 분석 전문가입니다.
       첨부된 파일에서 성적 데이터를 전수 추출하여 JSON으로 반환하십시오.
       
@@ -270,51 +275,39 @@ const App = () => {
       6. A, B, C, D, E 성취도 비율분석에 해당하는 숫자를 정확하게 파싱을 해서 정확하게 매핑해주세요.
       7. 업로드된 파일에서 모든 데이터를 정확하게 파싱하고, 분석 및 파싱 속도를 가속화 해주세요.
       8. 정확한 파싱과 고속화된 파싱된 데이터를 정확하게 맵핑해주세요.
-      9. 누락 방지: 파일에 존재하는 모든 학년, 모든 학기의 성적을 단 하나도 빠짐없이 grades 배열에 담으십시오.`;
+      9. 누락 방지: 파일에 존재하는 모든 학년, 모든 학기의 성적을 단 하나도 빠짐없이 grades 배열에 담으십시오.
+      
+      [필수 JSON 출력 형식 - 이 구조를 반드시 지키세요]
+      {
+        "grades": [
+          {
+            "semester": "1학년 1학기",
+            "group": "국어",
+            "name": "국어",
+            "credits": 4,
+            "score": 95,
+            "mean": 65.2,
+            "achievement": "A",
+            "grade": 1,
+            "studentCount": 320,
+            "distA": 15.2,
+            "distB": 22.1,
+            "distC": 30.5,
+            "distD": 20.2,
+            "distE": 12.0
+          }
+        ]
+      }`;
 
       const prompt = "성적표 이미지 내 중국어 등 예외 교과 분류를 포함한 모든 데이터를 입시 전문가용 규격에 맞춰 전수 추출하십시오.";
-
-      const generationConfig = {
-        temperature: 0.1, 
-        topK: 1,
-        maxOutputTokens: 8192, // 핵심 오류 해결 1: API 한도 초과(400 Bad Request)를 막기 위해 최대 토큰 한도를 정상치로 하향 조정
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            grades: {
-              type: "ARRAY",
-              items: {
-                type: "OBJECT",
-                properties: {
-                  semester: { type: "STRING" },
-                  group: { type: "STRING" },
-                  name: { type: "STRING" },
-                  credits: { type: "NUMBER" },
-                  score: { type: "NUMBER" },
-                  mean: { type: "NUMBER" },
-                  achievement: { type: "STRING" },
-                  grade: { type: "NUMBER", nullable: true },
-                  studentCount: { type: "NUMBER" },
-                  distA: { type: "NUMBER" },
-                  distB: { type: "NUMBER" },
-                  distC: { type: "NUMBER" },
-                  distD: { type: "NUMBER" },
-                  distE: { type: "NUMBER" }
-                },
-                required: ["name", "semester"]
-              }
-            }
-          },
-          required: ["grades"]
-        }
-      };
 
       const payload = {
         contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: mimeType, data: base64Data } }] }],
         systemInstruction: { parts: [{ text: systemPrompt }] },
-        generationConfig: generationConfig,
-        // 핵심 오류 해결 2: 성적표 내 개인정보(이름 등)로 인한 AI 안전 필터(Safety Filter) 차단을 원천 해제
+        generationConfig: {
+          temperature: 0.1, 
+          responseMimeType: "application/json" // 잦은 에러를 유발하는 responseSchema를 제거하고 순수 JSON 타입만 보장
+        },
         safetySettings: [
           { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
           { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -332,13 +325,14 @@ const App = () => {
         
         if (!response.ok) {
           const errText = await response.text();
-          console.error("API 서버 상세 에러 내역:", errText); // 디버깅 용도로만 상세 내역을 콘솔에 출력
-          if (retries < 2) {
+          console.error(`API 통신 에러 (${response.status}):`, errText); // 개발자 디버깅용
+          // 429(Too Many Requests) 또는 500 이상의 서버 에러일 때만 지연 후 재시도
+          if ((response.status === 429 || response.status >= 500) && retries < 2) {
             const delay = Math.pow(2, retries) * 1000;
             await new Promise(res => setTimeout(res, delay));
             return callApiWithRetry(retries + 1);
           }
-          throw new Error('데이터 추출 서버 응답 지연');
+          throw new Error('서버 응답 오류 발생');
         }
         return await response.json();
       };
