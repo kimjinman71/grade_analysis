@@ -25,9 +25,9 @@ import {
   Table as TableIcon
 } from 'lucide-react';
 
-// --- 시스템 구성 상수 (환경변수 보안 적용) ---
+// --- 시스템 구성 상수 ---
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ""; 
-const MODEL_NAME = "gemini-1.5-pro"; // 유료 티어 최상위 모델
+const MODEL_NAME = "gemini-1.5-pro"; // 유료 티어 전용 최상위 모델
 
 const VALID_PASSWORDS = import.meta.env.VITE_VALID_PASSWORDS 
   ? import.meta.env.VITE_VALID_PASSWORDS.split(',').map(p => p.trim())
@@ -91,7 +91,7 @@ const optimizeFile = async (file) => {
   });
 };
 
-// --- GradeRow: 개별 교과 성적 행 컴포넌트 ---
+// --- GradeRow 컴포넌트 ---
 const GradeRow = React.memo(({ row, type, mode, updateRow, removeRow }) => {
   return (
     <tr className="hover:bg-slate-50/30 transition-colors group">
@@ -214,7 +214,7 @@ const App = () => {
     else { setAuthError('유효하지 않은 보안 코드입니다. 전문가용 코드를 확인해 주세요.'); }
   };
 
-  // --- 핵심 데이터 추출 및 유료 티어 정밀 파싱 로직 ---
+  // --- 차세대 지능형 성적표 파싱 및 정밀 시맨틱 매핑 엔진 (v1beta 유료 최적화) ---
   const analyzeFile = async (file) => {
     setIsAnalyzing(true);
     setUploadStatus({ type: 'info', message: '데이터 분석 시스템이 정밀 해독 중입니다...' });
@@ -237,13 +237,13 @@ const App = () => {
       8. 정확한 파싱과 고속화된 파싱된 데이터를 정확하게 맵핑해주세요.
       9. 누락 방지: 파일에 존재하는 모든 학년, 모든 학기의 성적을 단 하나도 빠짐없이 grades 배열에 담으십시오.`;
 
-      // 유료 티어 최적화: Safety Settings를 BLOCK_NONE으로 설정하여 차단 원천 봉쇄
+      // 유료 티어의 Safety Settings BLOCK_NONE 적용 및 v1beta 규격 통신
       const payload = {
         contents: [{
           role: "user",
           parts: [
-            { text: "첨부된 성적표의 모든 데이터를 JSON 배열로 추출하십시오." },
-            { inlineData: { mimeType, data: base64Data } }
+            { text: "성적표 파일 내 모든 데이터를 JSON으로 정밀하게 추출하십시오." },
+            { inlineData: { mimeType: mimeType, data: base64Data } }
           ]
         }],
         systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -265,15 +265,14 @@ const App = () => {
         body: JSON.stringify(payload)
       });
 
-      if (!response.ok) throw new Error(`API Response Error: ${response.status}`);
+      if (!response.ok) throw new Error(`API 응답 오류: ${response.status}`);
 
       const result = await response.json();
       const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!rawText) throw new Error('추출된 데이터가 존재하지 않습니다. (Safety Filter 혹은 API 오류)');
+      
+      if (!rawText) throw new Error('추출된 데이터가 존재하지 않습니다.');
 
-      // 파싱 시 마크다운 코드 블록 제거 및 순수 JSON 추출
-      const cleanedJson = rawText.replace(/```json|```/gi, '').trim();
-      const parsedData = JSON.parse(cleanedJson);
+      const parsedData = JSON.parse(rawText);
       const rawGrades = parsedData.grades || [];
 
       if (rawGrades.length > 0) {
@@ -313,10 +312,10 @@ const App = () => {
         setGrades(mappedGrades);
         setUploadStatus({ type: 'success', message: `분석 완료: ${mappedGrades.length}개의 데이터가 전문가 리포트에 정밀 연동되었습니다.` });
       } else {
-        throw new Error('데이터 파싱 결과가 비어 있습니다.');
+        throw new Error('파싱된 결과가 비어 있습니다.');
       }
     } catch (error) {
-      console.error("Precision Parsing Error:", error);
+      console.error("Analysis Error:", error);
       setUploadStatus({ type: 'error', message: '데이터 추출 중 오류가 발생했습니다. 이미지 상태를 확인해 주세요.' });
     } finally { setIsAnalyzing(false); }
   };
@@ -327,7 +326,7 @@ const App = () => {
     else if (file) setUploadStatus({ type: 'error', message: '지원되지 않는 파일 형식입니다.' });
   };
 
-  // --- 원래 로직 및 계산 엔진 (유지) ---
+  // --- 기존 UI 유지용 로직 및 계산 엔진 ---
   const updateRow = useCallback((id, field, value) => {
     setGrades(prev => prev.map(g => {
       if (g.id === id) {
