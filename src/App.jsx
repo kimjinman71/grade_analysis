@@ -1,23 +1,12 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { 
   Plus, 
   Trash2, 
-  BarChart3, 
-  Calculator, 
-  BookOpen, 
   GraduationCap, 
-  TrendingUp, 
-  Download,
-  Info,
   FileUp, 
   Loader2, 
   CheckCircle2, 
   AlertCircle, 
-  Hash, 
-  Trophy, 
-  Users, 
-  Award, 
-  Percent, 
   Layers, 
   Lock, 
   Key, 
@@ -25,13 +14,13 @@ import {
   Table as TableIcon
 } from 'lucide-react';
 
-// --- 시스템 구성 상수 (보안 처리) ---
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ""; 
-const MODEL_NAME = "gemini-1.5-pro"; // 유료 티어의 압도적인 파싱 성능을 위해 Pro 모델 유지
+// --- 시스템 구성 상수 (보안 처리 완료) ---
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY; 
+const MODEL_NAME = "gemini-2.5-flash-preview-09-2025";
 
-const VALID_PASSWORDS = import.meta.env.VITE_VALID_PASSWORDS 
-  ? import.meta.env.VITE_VALID_PASSWORDS.split(',').map(p => p.trim())
-  : [];
+// .env에서 비밀번호를 가져와 배열로 변환
+const rawPasswords = import.meta.env.VITE_VALID_PASSWORDS || "";
+const VALID_PASSWORDS = rawPasswords.split(',').map(p => p.trim().toLowerCase());
 
 const SEMESTERS = [
   '1학년 1학기', '1학년 2학기', 
@@ -85,7 +74,7 @@ const optimizeFile = async (file) => {
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
-        resolve({ data: canvas.toDataURL('image/jpeg', 0.9).split(',')[1], mimeType: "image/jpeg" });
+        resolve({ data: canvas.toDataURL('image/jpeg', 0.95).split(',')[1], mimeType: "image/jpeg" });
       };
     };
   });
@@ -247,7 +236,7 @@ const App = () => {
     }
   };
 
-  // --- 핵심 데이터 추출 및 정밀 시맨틱 매핑 엔진 (v1beta Fetch 최적화 버전) ---
+  // --- 차세대 지능형 성적표 파싱 및 정밀 시맨틱 매핑 엔진 ---
   const analyzeFile = async (file) => {
     setIsAnalyzing(true);
     setUploadStatus({ type: 'info', message: '데이터 분석 시스템이 정밀 해독 중입니다...' });
@@ -255,8 +244,7 @@ const App = () => {
     try {
       const { data: base64Data, mimeType } = await optimizeFile(file);
       
-      // 사용자 요청 100% 동일한 systemPrompt 내용 유지
-      const systemPrompt = `당신은 대한민국 고등학교 성적표(나이스 성적통지표) 분석 전문가입니다.
+      const systemInstruction = `당신은 대한민국 고등학교 성적표(나이스 성적통지표) 분석 전문가입니다.
       첨부된 파일에서 성적 데이터를 전수 추출하여 JSON으로 반환하십시오.
       
       [데이터 추출 및 매핑 중요 규칙]
@@ -270,87 +258,171 @@ const App = () => {
       8. 정확한 파싱과 고속화된 파싱된 데이터를 정확하게 맵핑해주세요.
       9. 누락 방지: 파일에 존재하는 모든 학년, 모든 학기의 성적을 단 하나도 빠짐없이 grades 배열에 담으십시오.`;
 
-      // 오류 해결 1: systemInstruction을 contents 내부가 아닌 별도 객체로 분리하여 전송 (정식 API 규격)
-      const payload = {
-        contents: [
-          {
-            parts: [
-              { text: "성적표 파일에서 모든 데이터를 분석하여 JSON으로 출력하라." },
-              { inlineData: { mimeType, data: base64Data } }
-            ]
-          }
-        ],
-        systemInstruction: {
-          parts: [{ text: systemPrompt }]
-        },
-        generationConfig: {
-          temperature: 0.1,
-          responseMimeType: "application/json"
+      const prompt = "성적표 이미지 내 중국어 등 예외 교과 분류를 포함한 모든 데이터를 입시 전문가용 규격에 맞춰 전수 추출하십시오.";
+
+      const generationConfig = {
+        temperature: 0.1, 
+        topK: 1,
+        maxOutputTokens: 15000, 
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            grades: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  semester: { type: "STRING" },
+                  group: { type: "STRING" },
+                  name: { type: "STRING" },
+                  credits: { type: "NUMBER" },
+                  score: { type: "NUMBER" },
+                  mean: { type: "NUMBER" },
+                  achievement: { type: "STRING" },
+                  grade: { type: "NUMBER", nullable: true },
+                  studentCount: { type: "NUMBER" },
+                  distA: { type: "NUMBER" },
+                  distB: { type: "NUMBER" },
+                  distC: { type: "NUMBER" },
+                  distD: { type: "NUMBER" },
+                  distE: { type: "NUMBER" }
+                },
+                required: ["name", "semester"]
+              }
+            }
+          },
+          required: ["grades"]
         }
       };
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const payload = {
+        contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: mimeType, data: base64Data } }] }],
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        generationConfig: generationConfig
+      };
 
-      if (!response.ok) throw new Error(`API Response Error: ${response.status}`);
+      const callApiWithRetry = async (retries = 0) => {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+          if (retries < 5) {
+            const delay = Math.pow(2, retries) * 1000;
+            await new Promise(res => setTimeout(res, delay));
+            return callApiWithRetry(retries + 1);
+          }
+          throw new Error('데이터 추출 서버 응답 지연');
+        }
+        return await response.json();
+      };
 
-      const result = await response.json();
-      const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      const result = await callApiWithRetry();
+      let rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
       
-      if (!rawText) throw new Error('응답 데이터가 비어있습니다.');
-
-      // 오류 해결 2: 정규식을 통한 완벽한 JSON 추출 (마크다운 노이즈 제거)
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('JSON 형식을 찾을 수 없습니다.');
+      if (!rawText) throw new Error('추출된 데이터 응답이 비어 있습니다.');
       
-      const parsedData = JSON.parse(jsonMatch[0]);
-      const rawGrades = parsedData.grades || [];
+      let cleanedText = rawText.trim().replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim();
+
+      let rawGrades = [];
+      try {
+        const parsedData = JSON.parse(cleanedText);
+        rawGrades = parsedData.grades || [];
+      } catch (e) {
+        const objectPattern = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g;
+        const matches = cleanedText.match(objectPattern);
+        if (matches) {
+          matches.forEach(m => {
+            try {
+              let safeObj = m;
+              if (safeObj.split('{').length > safeObj.split('}').length) safeObj += '}'.repeat(safeObj.split('{').length - safeObj.split('}').length);
+              const obj = JSON.parse(safeObj);
+              if (obj.name || obj.semester) rawGrades.push(obj);
+            } catch (innerE) {}
+          });
+        }
+      }
 
       if (rawGrades.length > 0) {
+        // --- 강화된 지능형 시맨틱 매핑 및 입시 데이터 정규화 엔진 ---
         const mappedGrades = rawGrades.map((item, index) => {
-          const num = (v, d = 0) => {
-            if (v === null || v === undefined || v === '') return d;
-            const n = parseFloat(String(v).replace(/[^0-9.-]/g, ''));
-            return isNaN(n) ? d : n;
+          const parseSafeNum = (val, def = 0) => {
+            if (val === null || val === undefined) return def;
+            const clean = String(val).replace(/[^0-9.-]/g, '');
+            const num = parseFloat(clean);
+            return isNaN(num) ? def : num;
           };
 
           let sem = String(item.semester || '').trim();
-          const semMatch = sem.match(/([1-3])\s*[학년|-]?\s*([1-2])\s*[학기]?/);
-          sem = semMatch ? `${semMatch[1]}학년 ${semMatch[2]}학기` : (SEMESTERS.find(s => s.replace(/\s/g, '').includes(sem.replace(/\s/g, ''))) || '1학년 1학기');
+          const semNumMatch = sem.match(/([1-3])\s*[학년|-]?\s*([1-2])\s*[학기]?/);
+          if (semNumMatch) {
+            sem = `${semNumMatch[1]}학년 ${semNumMatch[2]}학기`;
+          } else if (!SEMESTERS.includes(sem)) {
+            sem = SEMESTERS.find(s => s.replace(/\s/g, '').includes(sem.replace(/\s/g, ''))) || '1학년 1학기';
+          }
 
-          const subj = String(item.name || '').trim();
-          const grp = String(item.group || '').trim();
-          const matchedGrp = SUBJECT_CATEGORIES.find(c => c.id !== '기타' && c.keywords.some(k => subj.includes(k) || grp.includes(k)) && !c.exclusions.some(ex => subj.includes(ex)));
+          let subjName = String(item.name || '').trim();
+          let grp = String(item.group || '').trim();
+          
+          // 지능형 교과군 분류 (Heuristic Priority Mapping)
+          const otherCat = SUBJECT_CATEGORIES.find(c => c.id === '기타');
+          const isOther = otherCat.keywords.some(k => subjName.includes(k));
+          
+          let finalGroup = '기타';
+          if (isOther) {
+            finalGroup = '기타';
+          } else {
+            const matchedCategory = SUBJECT_CATEGORIES.find(c => 
+              c.id !== '기타' && 
+              c.keywords.some(k => subjName.includes(k) || grp.includes(k)) &&
+              !c.exclusions.some(ex => subjName.includes(ex))
+            );
+            finalGroup = matchedCategory ? matchedCategory.id : '기타';
+          }
 
-          const gVal = num(item.grade, null);
-          const isRel = gVal !== null && gVal >= 1 && gVal <= 9;
+          let gVal = item.grade;
+          let isRelative = false;
+          const gNum = parseSafeNum(gVal, null);
+          if (gNum !== null && gNum >= 1 && gNum <= 9) {
+            gVal = gNum;
+            isRelative = true;
+          } else {
+            gVal = null;
+          }
 
-          return {
+          let ach = String(item.achievement || 'A').toUpperCase().replace(/[^A-E]/g, '');
+          ach = ach.length > 0 ? ach.charAt(0) : 'A';
+
+          return { 
             id: Date.now() + index + Math.random(),
-            type: isRel ? 'relative' : 'absolute',
+            type: isRelative ? 'relative' : 'absolute',
             semester: sem,
-            group: matchedGrp ? matchedGrp.id : '기타',
-            name: subj || '미상 과목',
-            credits: num(item.credits, 1),
-            score: num(item.score, 0),
-            mean: num(item.mean, 0),
-            achievement: String(item.achievement || 'A').toUpperCase().charAt(0),
-            grade: isRel ? gVal : null,
-            studentCount: num(item.studentCount, 0),
-            distA: num(item.distA, 0), distB: num(item.distB, 0), distC: num(item.distC, 0), distD: num(item.distD, 0), distE: num(item.distE, 0)
+            group: finalGroup,
+            name: subjName || '미상 과목',
+            credits: parseSafeNum(item.credits, 1),
+            score: parseSafeNum(item.score, 0),
+            mean: parseSafeNum(item.mean, 0),
+            achievement: ach,
+            grade: gVal,
+            studentCount: parseSafeNum(item.studentCount, 0),
+            distA: parseSafeNum(item.distA, 0),
+            distB: parseSafeNum(item.distB, 0),
+            distC: parseSafeNum(item.distC, 0),
+            distD: parseSafeNum(item.distD, 0),
+            distE: parseSafeNum(item.distE, 0)
           };
         });
 
         setGrades(mappedGrades);
         setUploadStatus({ type: 'success', message: `분석 완료: ${mappedGrades.length}개의 데이터가 전문가 리포트에 정밀 연동되었습니다.` });
       } else {
-        throw new Error('파싱된 성적 데이터가 존재하지 않습니다.');
+        throw new Error('성적표 양식을 인식할 수 없습니다. 더 선명한 파일을 업로드해 주세요.');
       }
     } catch (error) {
-      console.error("Critical Parsing Error:", error);
+      console.error("Precision Parsing Error:", error);
       setUploadStatus({ type: 'error', message: '데이터 추출 중 오류가 발생했습니다. 이미지 상태를 확인해 주세요.' });
     } finally {
       setIsAnalyzing(false);
@@ -359,52 +431,96 @@ const App = () => {
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
-    if (file && ["application/pdf", "image/jpeg", "image/png", "image/jpg"].includes(file.type)) analyzeFile(file);
-    else if (file) setUploadStatus({ type: 'error', message: '지원되지 않는 파일 형식입니다.' });
+    const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
+    if (file && allowedTypes.includes(file.type)) {
+      analyzeFile(file);
+    } else if (file) {
+      setUploadStatus({ type: 'error', message: '지원되지 않는 파일 형식입니다.' });
+    }
   };
 
   const updateRow = useCallback((id, field, value) => {
     setGrades(prev => prev.map(g => {
-      if (g.id === id) {
-        const newRow = { ...g, [field]: value };
-        if (field === 'grade') {
-          const num = parseInt(value, 10);
-          newRow.type = (!isNaN(num) && num >= 1 && num <= 9) ? 'relative' : 'absolute';
+        if (g.id === id) {
+            const newRow = { ...g, [field]: value };
+            if (field === 'grade') {
+                const num = parseInt(value, 10);
+                if (!isNaN(num) && num >= 1 && num <= 9) { newRow.type = 'relative'; } 
+                else { newRow.type = 'absolute'; }
+            }
+            return newRow;
         }
-        return newRow;
-      }
-      return g;
+        return g;
     }));
   }, []);
 
-  const removeRow = useCallback((id) => setGrades(prev => prev.filter(g => g.id !== id)), []);
-  const addRow = useCallback((type) => setGrades(prev => [...prev, { id: Date.now(), type, semester: '1학년 1학기', group: '국어', name: '', credits: 1, score: 0, mean: 0, achievement: 'A', studentCount: 0, grade: type === 'relative' ? 1 : null, distA: 0, distB: 0, distC: 0, distD: 0, distE: 0 }]), []);
+  const removeRow = useCallback((id) => {
+    setGrades(prev => prev.filter(g => g.id !== id));
+  }, []);
+
+  const addRow = useCallback((type) => {
+    setGrades(prev => [...prev, {
+      id: Date.now(),
+      type: type,
+      semester: '1학년 1학기',
+      group: '국어',
+      name: '',
+      credits: 1,
+      score: 0,
+      mean: 0,
+      achievement: 'A',
+      studentCount: 0,
+      grade: type === 'relative' ? 1 : null,
+      distA: 0, distB: 0, distC: 0, distD: 0, distE: 0
+    }]);
+  }, []);
 
   const analysis = useMemo(() => {
-    const norm = (s) => String(s || '').replace(/\s+/g, '');
+    const normalizeStr = (str) => String(str || '').replace(/\s+/g, '');
+    const isMatchSem = (gSem, targetSem) => normalizeStr(gSem) === normalizeStr(targetSem);
+    const isMatchYear = (gSem, targetYear) => normalizeStr(gSem).startsWith(normalizeStr(targetYear));
+    const isMatchGroup = (gGroup, targets) => gGroup && targets.some(t => normalizeStr(gGroup).includes(normalizeStr(t)));
+
+    const relativeGrades = grades.filter(g => g.type === 'relative' && g.grade !== null && !isNaN(parseFloat(g.grade)) && parseFloat(g.grade) >= 1 && parseFloat(g.grade) <= 9);
+    
     const calculateWeightedAvg = (items) => {
-      let totalC = 0, sum = 0, valid = 0;
-      items.forEach(i => {
-        const c = parseFloat(i.credits) || 0;
-        const g = parseFloat(i.grade) || 0;
-        if (c > 0 && g >= 1 && g <= 9) { totalC += c; sum += (c * g); valid++; }
-      });
-      return (valid > 0 && totalC > 0) ? (sum / totalC).toFixed(2) : "-";
+      if (!items || items.length === 0) return "-";
+      let totalCredits = 0, weightedSum = 0, validCount = 0;
+      for (const item of items) {
+          const c = parseFloat(item.credits) || 0;
+          const g = parseFloat(item.grade) || 0;
+          if (c > 0 && g >= 1 && g <= 9) {
+              totalCredits += c;
+              weightedSum += (c * g);
+              validCount++;
+          }
+      }
+      return (validCount > 0 && totalCredits > 0) ? (weightedSum / totalCredits).toFixed(2) : "-";
     };
+
     const rowDefs = [
       { label: '전교과', filter: () => true },
-      { label: '국수영사과', filter: (g) => ['국어', '수학', '영어', '사회', '과학', '한국사'].some(t => norm(g.group).includes(norm(t))) },
-      { label: '국수영사', filter: (g) => ['국어', '수학', '영어', '사회', '한국사'].some(t => norm(g.group).includes(norm(t))) },
-      { label: '국수영과', filter: (g) => ['국어', '수학', '영어', '과학'].some(t => norm(g.group).includes(norm(t))) },
-      { label: '국어', filter: (g) => norm(g.group).includes('국어') },
-      { label: '수학', filter: (g) => norm(g.group).includes('수학') },
-      { label: '영어', filter: (g) => norm(g.group).includes('영어') },
-      { label: '사회', filter: (g) => ['사회', '한국사'].some(t => norm(g.group).includes(norm(t))) },
-      { label: '과학', filter: (g) => norm(g.group).includes('과학') },
+      { label: '국수영사과', filter: (g) => isMatchGroup(g.group, ['국어', '수학', '영어', '사회', '과학', '한국사']) },
+      { label: '국수영사', filter: (g) => isMatchGroup(g.group, ['국어', '수학', '영어', '사회', '한국사']) },
+      { label: '국수영과', filter: (g) => isMatchGroup(g.group, ['국어', '수학', '영어', '과학']) },
+      { label: '국어', filter: (g) => isMatchGroup(g.group, ['국어']) },
+      { label: '수학', filter: (g) => isMatchGroup(g.group, ['수학']) },
+      { label: '영어', filter: (g) => isMatchGroup(g.group, ['영어']) },
+      { label: '사회', filter: (g) => isMatchGroup(g.group, ['사회', '한국사']) },
+      { label: '과학', filter: (g) => isMatchGroup(g.group, ['과학']) },
     ];
+
     return {
-      semesterMatrix: rowDefs.map(d => ({ label: d.label, all: calculateWeightedAvg(grades.filter(g => g.type === 'relative').filter(d.filter)), ...SEMESTERS.reduce((acc, s) => ({ ...acc, [s]: calculateWeightedAvg(grades.filter(g => g.type === 'relative').filter(d.filter).filter(g => norm(g.semester) === norm(s))) }), {}) })),
-      gradeMatrix: rowDefs.map(d => ({ label: d.label, all: calculateWeightedAvg(grades.filter(g => g.type === 'relative').filter(d.filter)), ...YEARS.reduce((acc, y) => ({ ...acc, [y]: calculateWeightedAvg(grades.filter(g => g.type === 'relative').filter(d.filter).filter(g => norm(g.semester).startsWith(norm(y)))) }), {}) }))
+      semesterMatrix: rowDefs.map(d => ({ 
+        label: d.label, 
+        all: calculateWeightedAvg(relativeGrades.filter(d.filter)), 
+        ...SEMESTERS.reduce((acc, s) => ({ ...acc, [s]: calculateWeightedAvg(relativeGrades.filter(d.filter).filter(g => isMatchSem(g.semester, s))) }), {}) 
+      })),
+      gradeMatrix: rowDefs.map(d => ({ 
+        label: d.label, 
+        all: calculateWeightedAvg(relativeGrades.filter(d.filter)), 
+        ...YEARS.reduce((acc, y) => ({ ...acc, [y]: calculateWeightedAvg(relativeGrades.filter(d.filter).filter(g => isMatchYear(g.semester, y))) }), {}) 
+      }))
     };
   }, [grades]);
 
