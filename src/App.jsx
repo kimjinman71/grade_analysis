@@ -777,6 +777,8 @@ import {
   Printer
 } from 'lucide-react';
 
+// --- 시스템 구성 상수 ---
+// (Canvas 통합 환경 구동을 위해 정적 변수로 안전하게 처리되었습니다. Vercel 배포 시 import.meta.env 로 원복하셔도 무방합니다.)
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY; 
 const MODEL_NAME = "gemini-2.5-flash";
 
@@ -1014,7 +1016,7 @@ const App = () => {
   // // --- AI ñehesa'ỹijo pya'e ha hekopete ---
   const analyzeFile = async (file) => {
     setIsAnalyzing(true);
-    setUploadStatus({ type: 'info', message: 'AI 데이터 분석 엔진이 초고속으로 정밀 해독 중입니다...' });
+    setUploadStatus({ type: 'info', message: '데이터 분석 엔진이 초고속으로 정밀 해독 중입니다...' });
 
     try {
       const { data: base64Data, mimeType } = await optimizeFile(file);
