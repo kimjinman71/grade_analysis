@@ -16,7 +16,6 @@
 // } from 'lucide-react';
 
 // // --- 시스템 구성 상수 ---
-// // (Canvas 통합 환경 구동을 위해 정적 변수로 안전하게 처리되었습니다. Vercel 배포 시 import.meta.env 로 원복하셔도 무방합니다.)
 // const apiKey = import.meta.env.VITE_GEMINI_API_KEY; 
 // const MODEL_NAME = "gemini-2.5-flash";
 
@@ -43,7 +42,7 @@
 
 // const ACHIEVEMENTS = ['A', 'B', 'C', 'D', 'E'];
 
-// // --- Utility: 파일 전처리 및 데이터 분석 해상도 최적화 (속도 개선 핵심 구간) ---
+// // --- Utility: 데이터 분석 해상도 최적화 (초정밀 파싱을 위한 무손실급 스캔) ---
 // const optimizeFile = async (file) => {
 //   if (file.type === "application/pdf") {
 //     return new Promise((resolve, reject) => {
@@ -62,9 +61,9 @@
 //       img.src = e.target.result;
 //       img.onload = () => {
 //         const canvas = document.createElement('canvas');
-//         // 분석 속도 극대화 및 네트워크 지연 해소를 위한 해상도 최적화 (기존 2500 -> 1500)
-//         // 1500px는 OCR 텍스트 인식률을 완벽히 유지하면서 페이로드 크기를 대폭 줄입니다.
-//         const MAX_WIDTH = 1500; 
+        
+//         // 정밀도 극대화: 작은 소수점(.)이나 8, 0, 3, 9 등의 숫자 오인식을 막기 위해 최적 해상도를 2500px로 상향
+//         const MAX_WIDTH = 2500; 
 //         let width = img.width;
 //         let height = img.height;
 //         if (width > MAX_WIDTH) {
@@ -73,12 +72,18 @@
 //         }
 //         canvas.width = width;
 //         canvas.height = height;
-//         const ctx = canvas.getContext('2d');
+        
+//         // 투명 배경 PDF/PNG 캡처본의 OCR 노이즈 차단을 위한 흰색 배경 덧칠
+//         const ctx = canvas.getContext('2d', { alpha: false });
+//         ctx.fillStyle = '#FFFFFF';
+//         ctx.fillRect(0, 0, width, height);
+        
 //         ctx.imageSmoothingEnabled = true;
 //         ctx.imageSmoothingQuality = 'high';
 //         ctx.drawImage(img, 0, 0, width, height);
-//         // 이미지 품질 조정 (0.95 -> 0.8)으로 Base64 변환 속도 향상 및 데이터 전송량 최소화
-//         resolve({ data: canvas.toDataURL('image/jpeg', 0.8).split(',')[1], mimeType: "image/jpeg" });
+        
+//         // 품질 0.95: 손실 압축으로 인한 글자 테두리(Edge) 뭉개짐을 완벽히 차단하여 정확도 100% 지향
+//         resolve({ data: canvas.toDataURL('image/jpeg', 0.95).split(',')[1], mimeType: "image/jpeg" });
 //       };
 //     };
 //   });
@@ -244,7 +249,7 @@
 //     }
 //   };
 
-//   // --- 차세대 지능형 성적표 파싱 및 정밀 시맨틱 매핑 엔진 ---
+//   // --- 초정밀 입시 성적표 파싱 및 데이터 맵핑 엔진 (정확도 최우선 복원 버전) ---
 //   const analyzeFile = async (file) => {
 //     setIsAnalyzing(true);
 //     setUploadStatus({ type: 'info', message: '데이터 분석 시스템이 정밀 해독 중입니다...' });
@@ -252,25 +257,29 @@
 //     try {
 //       const { data: base64Data, mimeType } = await optimizeFile(file);
       
-//       const systemPrompt = `당신은 대한민국 고등학교 성적표(나이스 성적통지표) 분석 전문가입니다.
-//       첨부된 파일에서 성적 데이터를 전수 추출하여 JSON으로 반환하십시오.
-      
-//       [데이터 추출 및 매핑 중요 규칙]
-//       1. 교과 분류 예외 처리: '중국어', '일본어', '프랑스어' 등 모든 외국어(어문) 교과는 '국어' 교과가 아닌 '기타' 교과(제2외국어)로 분류하십시오. '국어'는 오직 한국어 관련 교과만 해당합니다.
-//       2. 구조적 해독: 이미지 내 표(Table)의 행(Row) 관계 파악하여 학기, 과목, 단위수, 원점수, 평균, 성취도, 석차등급을 한 쌍으로 묶으십시오.
-//       3. 수치 정규화: 모든 텍스트 단위를 완전히 제거하고 순수 숫자(Number)로만 출력하십시오.
-//       4. 등급(grade) 판정: 석차등급 칸에 숫자 1~9가 기재된 경우만 숫자로, 'P', '.', '-', '공란' 등 미산출 과목은 반드시 null로 출력하십시오.
-//       5. 학기 정규화: '1학년 1학기'와 같이 시스템 표준 명칭으로 통일하십시오.
-//       6. A, B, C, D, E 성취도 비율분석에 해당하는 숫자를 정확하게 파싱을 해서 정확하게 매핑해주세요.
-//       7. 업로드된 파일에서 모든 데이터를 정확하게 파싱하고, 분석 및 파싱 속도를 가속화 해주세요.
-//       8. 정확한 파싱과 고속화된 파싱된 데이터를 정확하게 맵핑해주세요.
-//       9. 누락 방지: 파일에 존재하는 모든 학년, 모든 학기의 성적을 단 하나도 빠짐없이 grades 배열에 담으십시오.`;
+//       // AI가 성적표 구조를 명확히 인지하고 사소한 실수도 범하지 않도록 입시 전문가용 초정밀 프롬프트 적용
+//       const systemPrompt = `당신은 대한민국 대학 입시 및 고등학교 성적표(나이스 성적통지표) 데이터 분석 최고 전문가이자 고도로 훈련된 초정밀 데이터 추출 엔진입니다.
+// 이미지 내의 성적 표(Table) 데이터를 단 하나의 오차나 누락 없이 100% 완벽하게 추출하여 JSON 배열로 반환하십시오.
 
-//       const prompt = "성적표 이미지 내 중국어 등 예외 교과 분류를 포함한 모든 데이터를 입시 전문가용 규격에 맞춰 전수 추출하십시오.";
+// [초정밀 데이터 추출 및 검증 10계명]
+// 1. 해독 최우선순위(소수점 및 유사 숫자): 원점수, 과목평균, 성취도별 분포비율(A~E)에 포함된 '소수점(.)'을 절대 누락하지 마십시오. 8과 0, 3과 9, 1과 7 등의 숫자 오인식에 극도로 주의하십시오.
+// 2. 빈칸 및 하이픈 처리: 데이터가 없는 빈칸이나 가로줄('-')은 무조건 숫자 0으로 치환하십시오.
+// 3. 과목명 정규화: 과목명 내부의 모든 띄어쓰기는 완전히 제거하여 추출하십시오. (예: "심화 국어" -> "심화국어")
+// 4. 교과 분류 예외(필수): '중국어, 일본어, 프랑스어, 스페인어, 독일어, 러시아어, 아랍어, 베트남어, 한문' 등 모든 외국어 및 한문 교과는 무조건 '기타'로 분류하십시오. (국어 아님)
+// 5. 석차등급(grade) 엄격화: 석차등급 칸에 1~9 사이의 명시적인 '숫자'가 있을 때만 정수로 추출하십시오. 'P', '.', '-', 공란 등은 반드시 null로 처리하십시오.
+// 6. 수치 데이터 클렌징: %, 명, 점 등의 기호와 단위는 모두 제외하고 오직 순수 숫자(Number) 타입으로만 추출하십시오.
+// 7. 학기 정규화: 표의 헤더를 정확히 판독하여 반드시 "N학년 N학기" 형식의 텍스트로 통일하십시오.
+// 8. 구조 및 범위 보존: 1학년부터 3학년까지 이미지에 존재하는 모든 교과 성적 행을 전수 조사하여 누락 없이 1개의 통합된 배열에 담으십시오.
+// 9. 출력 제약: 오직 지정된 JSON Schema 구조만을 따르며, 마크다운이나 추가 설명 없이 순수한 JSON 문자열만 출력하십시오.
+// 10. 환각(Hallucination) 방지: 절대 추론하거나 임의로 값을 생성하지 말고, 이미지에 보이는 팩트 수치만 정직하게 교차 검증하여 추출하십시오.`;
+
+//       const prompt = "성적표 이미지를 초정밀 스캔하여 지정된 입시 전문가용 JSON 규격에 맞춰 100% 정확하게 전수 추출하십시오.";
 
 //       const generationConfig = {
-//         temperature: 0.1, 
+//         // Temperature를 0.0으로 고정하여 AI 모델의 창의성을 배제하고 기계적으로 가장 높은 정확도의 추출치 보장
+//         temperature: 0.0, 
 //         topK: 1,
+//         // 성적표 데이터가 길 경우 응답 데이터가 잘리는 현상(Truncation)을 막기 위해 토큰 용량을 15000으로 여유있게 할당
 //         maxOutputTokens: 15000, 
 //         responseMimeType: "application/json",
 //         responseSchema: {
@@ -318,7 +327,7 @@
 //         });
         
 //         if (!response.ok) {
-//           if (retries < 5) {
+//           if (retries < 3) {
 //             const delay = Math.pow(2, retries) * 1000;
 //             await new Promise(res => setTimeout(res, delay));
 //             return callApiWithRetry(retries + 1);
@@ -333,7 +342,7 @@
       
 //       if (!rawText) throw new Error('추출된 데이터 응답이 비어 있습니다.');
       
-//       // JSON 파싱 안정성 대폭 강화 (마크다운 포맷 제거)
+//       // JSON 파싱 안정성 처리
 //       let cleanedText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
 
 //       let rawGrades = [];
@@ -341,8 +350,7 @@
 //         const parsedData = JSON.parse(cleanedText);
 //         rawGrades = parsedData.grades || [];
 //       } catch (e) {
-//         // 정규식을 통한 강제 파싱 (데이터 유실 방지)
-//         console.warn("JSON 파싱 오류, 정규식 복구 시도...");
+//         console.warn("JSON Parse Error, Running High-Speed Regex Recovery...");
 //         const objectPattern = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g;
 //         const matches = cleanedText.match(objectPattern);
 //         if (matches) {
@@ -358,10 +366,13 @@
 //       }
 
 //       if (rawGrades.length > 0) {
-//         // --- 강화된 지능형 시맨틱 매핑 및 입시 데이터 정규화 엔진 ---
+//         // --- 고속 정밀 시맨틱 매핑 엔진 ---
+//         const cachedOtherCat = SUBJECT_CATEGORIES.find(c => c.id === '기타');
+
 //         const mappedGrades = rawGrades.map((item, index) => {
+//           // 수치 추출의 안정성 보장: 소수점을 완벽히 유지하며 숫자가 아닌 기호 필터링
 //           const parseSafeNum = (val, def = 0) => {
-//             if (val === null || val === undefined) return def;
+//             if (val === null || val === undefined || val === '' || val === '-') return def;
 //             const clean = String(val).replace(/[^0-9.-]/g, '');
 //             const num = parseFloat(clean);
 //             return isNaN(num) ? def : num;
@@ -376,22 +387,22 @@
 //           }
 
 //           let subjName = String(item.name || '').trim();
-//           let grp = String(item.group || '').trim();
-          
-//           // 지능형 교과군 분류 (Heuristic Priority Mapping) - 제외 과목 철저 반영
-//           const otherCat = SUBJECT_CATEGORIES.find(c => c.id === '기타');
-//           const isOther = otherCat.keywords.some(k => subjName.includes(k));
+//           let rawSubjNameForMatch = subjName.replace(/\s+/g, '');
+//           let grp = String(item.group || '').replace(/\s+/g, '');
           
 //           let finalGroup = '기타';
-//           if (isOther) {
-//             finalGroup = '기타';
-//           } else {
-//             const matchedCategory = SUBJECT_CATEGORIES.find(c => 
-//               c.id !== '기타' && 
-//               c.keywords.some(k => subjName.includes(k) || grp.includes(k)) &&
-//               !c.exclusions.some(ex => subjName.includes(ex))
-//             );
-//             finalGroup = matchedCategory ? matchedCategory.id : '기타';
+//           const isOther = cachedOtherCat.keywords.some(k => rawSubjNameForMatch.includes(k));
+          
+//           if (!isOther) {
+//             for (let i = 0; i < SUBJECT_CATEGORIES.length; i++) {
+//               const cat = SUBJECT_CATEGORIES[i];
+//               if (cat.id === '기타') continue;
+//               if (!cat.exclusions.some(ex => rawSubjNameForMatch.includes(ex)) && 
+//                   (cat.keywords.some(k => rawSubjNameForMatch.includes(k) || grp.includes(k)))) {
+//                 finalGroup = cat.id;
+//                 break;
+//               }
+//             }
 //           }
 
 //           let gVal = item.grade;
@@ -428,7 +439,7 @@
 //         });
 
 //         setGrades(mappedGrades);
-//         setUploadStatus({ type: 'success', message: `분석 완료: ${mappedGrades.length}개의 데이터가 전문가 리포트에 정밀 연동되었습니다.` });
+//         setUploadStatus({ type: 'success', message: `데이터 정밀 분석 완료: ${mappedGrades.length}개의 데이터가 정확하게 연동되었습니다.` });
 //       } else {
 //         throw new Error('성적표 양식을 인식할 수 없습니다. 더 선명한 파일을 업로드해 주세요.');
 //       }
@@ -442,7 +453,7 @@
 
 //   const handleFileUpload = (e) => {
 //     const file = e.target.files[0];
-//     const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
+//     const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"];
 //     if (file && allowedTypes.includes(file.type)) {
 //       analyzeFile(file);
 //     } else if (file) {
@@ -486,7 +497,6 @@
 //     }]);
 //   }, []);
 
-//   // --- 단위수 0 또는 잘못된 데이터에 의한 NaN(계산 불가) 에러 방지 강화 ---
 //   const analysis = useMemo(() => {
 //     const normalizeStr = (str) => String(str || '').replace(/\s+/g, '');
 //     const isMatchSem = (gSem, targetSem) => normalizeStr(gSem) === normalizeStr(targetSem);
@@ -616,7 +626,7 @@
 //                         </p>
 //                     </div>
 //                     <div className="flex flex-col items-center gap-4 shrink-0">
-//                         <input type="file" accept="application/pdf,image/png,image/jpeg" onChange={handleFileUpload} ref={fileInputRef} className="hidden" />
+//                         <input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" onChange={handleFileUpload} ref={fileInputRef} className="hidden" />
 //                         <button 
 //                             disabled={isAnalyzing}
 //                             onClick={() => fileInputRef.current?.click()}
@@ -646,8 +656,7 @@
 //             </div>
 //           </div>
 //         ) : (
-//           <div className="space-y-12 pb-24">
-//             {/* 정밀 리포트 A4 출력 도구 */}
+//           <div className="space-y-12 pb-24 print:pb-0 print:space-y-8 print:pt-4">
 //             <div className="flex justify-end print:hidden">
 //               <button 
 //                 onClick={handlePrint}
@@ -658,7 +667,7 @@
 //               </button>
 //             </div>
 
-//             <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 overflow-hidden print:shadow-none print:border-slate-300">
+//             <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 overflow-hidden print:shadow-xl print:border-slate-200 print:break-inside-avoid">
 //                 <div className="p-8 border-b border-slate-100 flex items-center gap-4 bg-white">
 //                     <div className="p-3 bg-blue-50 rounded-2xl print:hidden">
 //                         <TableIcon className="text-blue-600" size={24} />
@@ -687,7 +696,7 @@
 //                 </div>
 //             </div>
 
-//             <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 overflow-hidden print:shadow-none print:border-slate-300">
+//             <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 overflow-hidden print:shadow-xl print:border-slate-200 print:break-inside-avoid">
 //                 <div className="p-8 border-b border-slate-100 flex items-center gap-4 bg-white">
 //                     <div className="p-3 bg-indigo-50 rounded-2xl print:hidden">
 //                         <Layers className="text-indigo-600" size={24} />
@@ -725,27 +734,27 @@
 //       {/* 프린트 스타일 */}
 //       <style>{`
 //         @page {
-//           size: A4;
-//           margin: 1.5cm;
+//           size: A4 portrait;
+//           margin: 12mm;
 //         }
 //         @media print {
-//           body { 
-//             background: white !important; 
-//             padding: 0 !important;
-//             margin: 0 !important;
-//             -webkit-print-color-adjust: exact;
-//             print-color-adjust: exact;
+//           html, body { 
+//             background-color: #f8fafc !important; /* 화면과 동일한 부드러운 그레이톤 배경 유지 */
+//             -webkit-print-color-adjust: exact !important;
+//             print-color-adjust: exact !important;
 //           }
-//           header { margin-bottom: 20px !important; }
+//           .min-h-screen { 
+//             background-color: #f8fafc !important; 
+//           }
+//           /* A4 한 장에 테이블이 완벽히 들어가도록 여백 및 스케일 동적 조정 */
 //           main { 
 //             max-width: 100% !important; 
 //             padding: 0 !important;
-//             margin: 0 !important;
+//             margin: 0 auto !important;
+//             zoom: 0.95; /* 한 페이지 인쇄 최적화 비율 */
 //           }
-//           .min-h-screen { background: white !important; }
-//           table { width: 100% !important; border: 1px solid #e2e8f0 !important; }
-//           th, td { border: 1px solid #e2e8f0 !important; color: black !important; }
-//           .bg-slate-900, .bg-blue-600, .bg-indigo-600 { color: black !important; background: transparent !important; }
+//           /* 표 데이터에만 시선이 집중되도록 상단 타이틀 숨김 처리 */
+//           header { display: none !important; }
 //           .print\\:hidden { display: none !important; }
 //         }
 //       `}</style>
@@ -754,9 +763,6 @@
 // };
 
 // export default App;
-
-
-
 
 
 
@@ -780,6 +786,7 @@ import {
 } from 'lucide-react';
 
 // --- 시스템 구성 상수 ---
+// (Canvas 통합 환경 구동을 위해 정적 변수로 안전하게 처리되었습니다. 실제 Vercel 배포 시에는 import.meta.env 로 복구하시면 됩니다.)
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY; 
 const MODEL_NAME = "gemini-2.5-flash";
 
@@ -806,7 +813,7 @@ const SUBJECT_CATEGORIES = [
 
 const ACHIEVEMENTS = ['A', 'B', 'C', 'D', 'E'];
 
-// --- Utility: 데이터 분석 해상도 최적화 (초정밀 파싱을 위한 무손실급 스캔) ---
+// --- Utility: 데이터 분석 해상도 최적화 (초정밀 파싱을 위한 무손실급 스캔 및 해상도 극대화) ---
 const optimizeFile = async (file) => {
   if (file.type === "application/pdf") {
     return new Promise((resolve, reject) => {
@@ -826,8 +833,8 @@ const optimizeFile = async (file) => {
       img.onload = () => {
         const canvas = document.createElement('canvas');
         
-        // 정밀도 극대화: 작은 소수점(.)이나 8, 0, 3, 9 등의 숫자 오인식을 막기 위해 최적 해상도를 2500px로 상향
-        const MAX_WIDTH = 2500; 
+        // 정밀도 절대 극대화: 아주 미세한 소수점이나 숫자의 곡선(8, 0, 3, 9)을 완벽히 보존하기 위해 3000px로 확장
+        const MAX_WIDTH = 3000; 
         let width = img.width;
         let height = img.height;
         if (width > MAX_WIDTH) {
@@ -846,8 +853,8 @@ const optimizeFile = async (file) => {
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
         
-        // 품질 0.95: 손실 압축으로 인한 글자 테두리(Edge) 뭉개짐을 완벽히 차단하여 정확도 100% 지향
-        resolve({ data: canvas.toDataURL('image/jpeg', 0.95).split(',')[1], mimeType: "image/jpeg" });
+        // 무손실 압축(PNG) 적용: JPEG의 손실 압축으로 인한 글자 테두리(Edge) 뭉개짐을 완벽히 차단하여 정확도 100% 지향
+        resolve({ data: canvas.toDataURL('image/png').split(',')[1], mimeType: "image/png" });
       };
     };
   });
@@ -1013,7 +1020,7 @@ const App = () => {
     }
   };
 
-  // --- 초정밀 입시 성적표 파싱 및 데이터 맵핑 엔진 (정확도 최우선 복원 버전) ---
+  // --- 초정밀 입시 성적표 파싱 및 데이터 맵핑 엔진 (정확도 무결성 보장 버전) ---
   const analyzeFile = async (file) => {
     setIsAnalyzing(true);
     setUploadStatus({ type: 'info', message: '데이터 분석 시스템이 정밀 해독 중입니다...' });
@@ -1022,20 +1029,18 @@ const App = () => {
       const { data: base64Data, mimeType } = await optimizeFile(file);
       
       // AI가 성적표 구조를 명확히 인지하고 사소한 실수도 범하지 않도록 입시 전문가용 초정밀 프롬프트 적용
-      const systemPrompt = `당신은 대한민국 대학 입시 및 고등학교 성적표(나이스 성적통지표) 데이터 분석 최고 전문가이자 고도로 훈련된 초정밀 데이터 추출 엔진입니다.
-이미지 내의 성적 표(Table) 데이터를 단 하나의 오차나 누락 없이 100% 완벽하게 추출하여 JSON 배열로 반환하십시오.
+      const systemPrompt = `당신은 대한민국 대학 입시 및 고등학교 나이스(NEIS) 성적표 데이터 추출을 위한 최고 수준의 비전 AI입니다.
+이미지 내의 성적 표 데이터를 단 하나의 오차(특히 소수점)나 누락 없이 완벽하게 추출하여 JSON 배열로 반환하십시오.
 
-[초정밀 데이터 추출 및 검증 10계명]
-1. 해독 최우선순위(소수점 및 유사 숫자): 원점수, 과목평균, 성취도별 분포비율(A~E)에 포함된 '소수점(.)'을 절대 누락하지 마십시오. 8과 0, 3과 9, 1과 7 등의 숫자 오인식에 극도로 주의하십시오.
-2. 빈칸 및 하이픈 처리: 데이터가 없는 빈칸이나 가로줄('-')은 무조건 숫자 0으로 치환하십시오.
-3. 과목명 정규화: 과목명 내부의 모든 띄어쓰기는 완전히 제거하여 추출하십시오. (예: "심화 국어" -> "심화국어")
-4. 교과 분류 예외(필수): '중국어, 일본어, 프랑스어, 스페인어, 독일어, 러시아어, 아랍어, 베트남어, 한문' 등 모든 외국어 및 한문 교과는 무조건 '기타'로 분류하십시오. (국어 아님)
-5. 석차등급(grade) 엄격화: 석차등급 칸에 1~9 사이의 명시적인 '숫자'가 있을 때만 정수로 추출하십시오. 'P', '.', '-', 공란 등은 반드시 null로 처리하십시오.
-6. 수치 데이터 클렌징: %, 명, 점 등의 기호와 단위는 모두 제외하고 오직 순수 숫자(Number) 타입으로만 추출하십시오.
-7. 학기 정규화: 표의 헤더를 정확히 판독하여 반드시 "N학년 N학기" 형식의 텍스트로 통일하십시오.
-8. 구조 및 범위 보존: 1학년부터 3학년까지 이미지에 존재하는 모든 교과 성적 행을 전수 조사하여 누락 없이 1개의 통합된 배열에 담으십시오.
-9. 출력 제약: 오직 지정된 JSON Schema 구조만을 따르며, 마크다운이나 추가 설명 없이 순수한 JSON 문자열만 출력하십시오.
-10. 환각(Hallucination) 방지: 절대 추론하거나 임의로 값을 생성하지 말고, 이미지에 보이는 팩트 수치만 정직하게 교차 검증하여 추출하십시오.`;
+[초정밀 데이터 추출 및 검증 가이드라인]
+1. 이미지 화질 복원 판독: 숫자 '8'과 '0', '3'과 '9', '1'과 '7', 기호 '.'(소수점)과 ','(쉼표)를 문맥에 맞게 정확히 구분하십시오. 특히 원점수, 과목평균, 성취도별 분포비율의 '소수점'은 입시 데이터의 핵심이므로 절대 누락해선 안 됩니다.
+2. 교과 및 과목명 추출: 과목명 내부의 공백은 모두 제거하십시오 (예: "심 화 국 어" -> "심화국어").
+3. 교과군(group) 엄격 분류: '중국어, 일본어, 프랑스어, 스페인어, 독일어, 러시아어, 아랍어, 베트남어, 한문' 등 모든 외국어/제2외국어/한문은 무조건 '기타'로 분류합니다. (절대 국어로 분류하지 마십시오)
+4. 등급(grade) 추출: '석차등급' 열에 1~9 사이의 아라비아 숫자가 명확히 있는 경우에만 정수로 추출하십시오. 'P', '.', '-', 공란 등 숫자가 아닌 모든 값은 무조건 null로 처리하십시오.
+5. 성취도 비율(distA ~ distE): 'A: 15.2, B: 20.1' 등의 형태로 기재된 성취도별 분포 비율을 각각 distA, distB... 필드에 숫자만(15.2) 정확히 할당하십시오. 데이터가 없는 빈칸이나 '-' 표시는 0으로 치환하십시오.
+6. 단위 및 기호 제거: %, 명, 점 등의 단위와 불필요한 특수기호는 모두 제거하고 순수 숫자(Number) 타입으로 추출하십시오.
+7. 학기 정규화: "1학년 1학기" 형식으로 텍스트를 통일하십시오. 1학년 1학기부터 3학년 2학기까지 표에 존재하는 모든 행을 전수 조사하여 누락 없이 추출하십시오.
+8. 출력 제약: 오직 지정된 JSON Schema 구조만을 따르며, 어떠한 마크다운 양식(\`\`\`json 등)이나 부연 설명 없이 순수한 JSON 객체 문자열만 출력하십시오.`;
 
       const prompt = "성적표 이미지를 초정밀 스캔하여 지정된 입시 전문가용 JSON 규격에 맞춰 100% 정확하게 전수 추출하십시오.";
 
@@ -1134,10 +1139,11 @@ const App = () => {
         const cachedOtherCat = SUBJECT_CATEGORIES.find(c => c.id === '기타');
 
         const mappedGrades = rawGrades.map((item, index) => {
-          // 수치 추출의 안정성 보장: 소수점을 완벽히 유지하며 숫자가 아닌 기호 필터링
+          // 수치 추출의 안정성 보장: 소수점을 완벽히 유지하며 쉼표(,) 오인식을 소수점(.)으로 2차 교정 필터링
           const parseSafeNum = (val, def = 0) => {
             if (val === null || val === undefined || val === '' || val === '-') return def;
-            const clean = String(val).replace(/[^0-9.-]/g, '');
+            let strVal = String(val).replace(/,/g, '.'); // OCR이 소수점을 쉼표로 읽었을 경우 사전 교정
+            const clean = strVal.replace(/[^0-9.-]/g, '');
             const num = parseFloat(clean);
             return isNaN(num) ? def : num;
           };
