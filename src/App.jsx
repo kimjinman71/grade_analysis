@@ -779,8 +779,7 @@ import {
   Printer
 } from 'lucide-react';
 
-// --- 시스템 구성 상수 ---
-// (Canvas 통합 환경 구동을 위해 정적 변수로 안전하게 처리되었습니다. 실제 Vercel 배포 시에는 import.meta.env 로 복구하시면 됩니다.)
+// // --- Mba'eñemohenda ypy ---
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY; 
 const MODEL_NAME = "gemini-2.5-flash";
 
@@ -807,7 +806,7 @@ const SUBJECT_CATEGORIES = [
 
 const ACHIEVEMENTS = ['A', 'B', 'C', 'D', 'E'];
 
-// --- Utility: 데이터 분석 해상도 최적화 (초정밀 파싱을 위한 무손실급 스캔 및 속도 최적화) ---
+// // --- Mba'eporu: Ta'ãnga ñembopya'e ha ñemyesakã ---
 const optimizeFile = async (file) => {
   if (file.type === "application/pdf") {
     return new Promise((resolve, reject) => {
@@ -827,8 +826,8 @@ const optimizeFile = async (file) => {
       img.onload = () => {
         const canvas = document.createElement('canvas');
         
-        // 정밀도 극대화: 작은 소수점(.)이나 8, 0, 3, 9 등의 숫자 오인식을 막기 위해 최적 해상도를 2400px로 상향
-        const MAX_WIDTH = 2400; 
+        // // Ñemyesakã porãve haguã ta'ãnga (2800px) AI-pe guarã
+        const MAX_WIDTH = 2800; 
         let width = img.width;
         let height = img.height;
         if (width > MAX_WIDTH) {
@@ -838,8 +837,9 @@ const optimizeFile = async (file) => {
         canvas.width = width;
         canvas.height = height;
         
-        // 투명 배경 PDF/PNG 캡처본의 OCR 노이즈 차단을 위한 흰색 배경 덧칠
+        // // Ñemopotĩ morotĩme ha ñembo'i mbareteve OCR-pe guarã
         const ctx = canvas.getContext('2d', { alpha: false });
+        ctx.filter = 'contrast(1.1) grayscale(100%)';
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, width, height);
         
@@ -847,14 +847,14 @@ const optimizeFile = async (file) => {
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
         
-        // 품질 1.0 (최상): 손실 압축으로 인한 글자 테두리(Edge) 뭉개짐을 완벽히 차단하여 정확도 100% 지향
+        // // Ta'ãnga porãveha (1.0)
         resolve({ data: canvas.toDataURL('image/jpeg', 1.0).split(',')[1], mimeType: "image/jpeg" });
       };
     };
   });
 };
 
-// --- GradeRow: 개별 교과 성적 행 컴포넌트 ---
+// // --- GradeRow: Mbo'epy ñemohenda ---
 const GradeRow = React.memo(({ row, type, mode, updateRow, removeRow }) => {
   return (
     <tr className="hover:bg-slate-50/30 transition-colors group">
@@ -1014,37 +1014,37 @@ const App = () => {
     }
   };
 
-  // --- 초정밀 입시 성적표 파싱 및 데이터 맵핑 엔진 (정확도 및 속도 대폭 상향 버전) ---
+  // // --- AI ñehesa'ỹijo pya'e ha hekopete ---
   const analyzeFile = async (file) => {
     setIsAnalyzing(true);
-    setUploadStatus({ type: 'info', message: '데이터 분석 시스템이 정밀 해독 중입니다...' });
+    setUploadStatus({ type: 'info', message: '데이터 분석 시스템이 초정밀 해독 중입니다...' });
 
     try {
       const { data: base64Data, mimeType } = await optimizeFile(file);
       
-      // 모델 오작동을 원천 차단하기 위한 매우 명시적이고 엄격한 형태의 프롬프트 작성
-      const systemPrompt = `당신은 대한민국 대학 입시 및 고등학교 성적표(나이스 성적통지표) 데이터 분석 최고 전문가입니다.
-첨부된 이미지에서 표(Table) 구조를 완벽하게 분석하여 모든 학기의 성적 데이터를 단 하나도 누락 없이 JSON으로 추출하십시오.
+      // // Ñe'ẽmbyky hekopete AI-pe guarã (초정밀 입시 데이터 추출 10계명)
+      const systemPrompt = `당신은 대한민국 대학 입시 및 고등학교 성적표(나이스 성적통지표) 데이터 분석 최고 전문가이자 고도로 훈련된 초정밀 데이터 추출 엔진입니다.
+이미지 내의 성적 표(Table) 데이터를 단 하나의 오차나 누락 없이 100% 완벽하게 추출하여 JSON 배열로 반환하십시오.
 
-[초정밀 데이터 추출 10계명]
-1. 해독 우선순위: 원점수, 과목평균, 수강자수, 성취도별 분포비율(A~E)의 소수점(.)을 절대 누락하거나 다른 숫자로 오인하지 마십시오. (예: 0.0을 8.0으로 오인 주의)
-2. 빈칸 및 기호 처리: 성취도 분포 비율 등에서 빈칸이거나 가로줄('-') 표시만 되어 있다면 반드시 0으로 치환하십시오.
-3. 교과 분류 예외 처리: '중국어, 일본어, 프랑스어, 스페인어, 독일어, 러시아어, 아랍어, 베트남어, 한문' 등 모든 외국어/한문 교과는 무조건 '기타' 교과로 분류합니다.
-4. 등급(grade) 엄격화: 석차등급 칸에 1~9 사이의 명시적인 '숫자'가 있을 때만 정수로 추출하고, 그 외의 모든 기호('P', '.', '-', 공란 등)는 반드시 null로 처리하십시오.
-5. 수치 데이터 정규화: 기호(%, 명, 점)나 단위를 모두 제외하고 오직 순수 숫자(Number) 타입으로만 추출하십시오.
-6. 학기 정규화: 표의 헤더를 참조하여 반드시 "N학년 N학기" 형식의 텍스트로 통일하십시오.
-7. 과목명 처리: 과목명 내부의 띄어쓰기는 모두 제거한 문자열로 추출하십시오.
-8. 구조 보존: 이미지에 여러 표나 여러 학기가 나뉘어 표시되어 있더라도, 모든 교과 성적 행을 전수 조사하여 1개의 통합된 배열에 담으십시오.
-9. 엄격한 JSON: 오직 지정된 JSON Schema 구조만을 따르며, 추가적인 설명이나 마크다운 텍스트 없이 즉시 JSON 응답만 출력하십시오.
-10. 절대 환각(Hallucination)을 일으키지 말고 이미지에 보이는 팩트 수치만 정직하게 추출하십시오.`;
+[초정밀 데이터 추출 및 검증 10계명]
+1. 해독 최우선순위(소수점 및 유사 숫자): 원점수, 과목평균, 성취도별 분포비율(A~E)에 포함된 '소수점(.)'을 절대 누락하지 마십시오. 8과 0, 3과 9, 1과 7 등의 숫자 오인식에 극도로 주의하십시오.
+2. 빈칸 및 하이픈 처리: 데이터가 없는 빈칸이나 가로줄('-')은 무조건 숫자 0으로 치환하십시오.
+3. 과목명 정규화: 과목명 내부의 모든 띄어쓰기는 완전히 제거하여 추출하십시오. (예: "심화 국어" -> "심화국어")
+4. 교과 분류 예외(필수): '중국어, 일본어, 프랑스어, 스페인어, 독일어, 러시아어, 아랍어, 베트남어, 한문' 등 모든 외국어 및 한문 교과는 무조건 '기타'로 분류하십시오. (국어 아님)
+5. 석차등급(grade) 엄격화: 석차등급 칸에 1~9 사이의 명시적인 '숫자'가 있을 때만 정수로 추출하십시오. 'P', '.', '-', 공란 등은 반드시 null로 처리하십시오.
+6. 수치 데이터 클렌징: %, 명, 점 등의 기호와 단위는 모두 제외하고 오직 순수 숫자(Number) 타입으로만 추출하십시오.
+7. 학기 정규화: 표의 헤더를 정확히 판독하여 반드시 "N학년 N학기" 형식의 텍스트로 통일하십시오.
+8. 구조 및 범위 보존: 1학년부터 3학년까지 이미지에 존재하는 모든 교과 성적 행을 전수 조사하여 누락 없이 1개의 통합된 배열에 담으십시오.
+9. 출력 제약: 오직 지정된 JSON Schema 구조만을 따르며, 마크다운이나 추가 설명 없이 순수한 JSON 문자열만 출력하십시오.
+10. 환각(Hallucination) 방지: 절대 추론하거나 임의로 값을 생성하지 말고, 이미지에 보이는 팩트 수치만 정직하게 교차 검증하여 추출하십시오.`;
 
-      const prompt = "성적표 이미지를 스캔하여 지정된 입시 전문가용 JSON 규격에 맞춰 100% 정확하게 전수 추출하십시오.";
+      const prompt = "성적표 이미지를 초정밀 스캔하여 지정된 입시 전문가용 JSON 규격에 맞춰 100% 정확하게 전수 추출하십시오.";
 
       const generationConfig = {
-        // Temperature를 0.0으로 고정하여 AI 모델의 창의적 연산 시간을 완전히 소거, 확정적(Deterministic)이고 가장 빠른 추출 속도 보장
+        // // Temperature 0-pe, mba'e añetete ha pya'e
         temperature: 0.0, 
         topK: 1,
-        // 토큰 삭감으로 인한 데이터 잘림 현상 방지를 위해 토큰 여유분 충분히 확보
+        // // Token hetave ani haguã oikytĩ (15000)
         maxOutputTokens: 15000, 
         responseMimeType: "application/json",
         responseSchema: {
@@ -1092,7 +1092,7 @@ const App = () => {
         });
         
         if (!response.ok) {
-          // 응답 대기 지연을 방지하기 위한 재시도 간격 최적화
+          // // Ñeha'ã jey pya'e
           if (retries < 3) {
             const delay = Math.pow(2, retries) * 1000;
             await new Promise(res => setTimeout(res, delay));
@@ -1108,7 +1108,7 @@ const App = () => {
       
       if (!rawText) throw new Error('추출된 데이터 응답이 비어 있습니다.');
       
-      // JSON 파싱 안정성 및 속도 대폭 강화
+      // // JSON ñemopotĩ pya'e
       let cleanedText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
 
       let rawGrades = [];
@@ -1116,6 +1116,7 @@ const App = () => {
         const parsedData = JSON.parse(cleanedText);
         rawGrades = parsedData.grades || [];
       } catch (e) {
+        // // Ñemohenda jey jejavy oiko ramo
         console.warn("JSON Parse Error, Running High-Speed Regex Recovery...");
         const objectPattern = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g;
         const matches = cleanedText.match(objectPattern);
@@ -1132,11 +1133,11 @@ const App = () => {
       }
 
       if (rawGrades.length > 0) {
-        // --- 강화된 지능형 시맨틱 매핑 및 입시 데이터 정규화 엔진 ---
+        // // --- Ñemohenda pya'e ha hekopete ---
         const cachedOtherCat = SUBJECT_CATEGORIES.find(c => c.id === '기타');
 
         const mappedGrades = rawGrades.map((item, index) => {
-          // AI가 놓칠 수 있는 수치 오류 및 기호 오염을 프론트엔드 단에서 한 번 더 강력하게 보정
+          // // Ñemopotĩ papaha
           const parseSafeNum = (val, def = 0) => {
             if (val === null || val === undefined || val === '' || val === '-') return def;
             const clean = String(val).replace(/[^0-9.-]/g, '');
@@ -1152,12 +1153,12 @@ const App = () => {
             sem = SEMESTERS.find(s => s.replace(/\s/g, '').includes(sem.replace(/\s/g, ''))) || '1학년 1학기';
           }
 
+          // // Ñembogue paite pa'ũ ñembojoja haguã
           let subjName = String(item.name || '').trim();
-          // 공백으로 인한 키워드 매칭 오류 방지 처리
           let rawSubjNameForMatch = subjName.replace(/\s+/g, '');
           let grp = String(item.group || '').replace(/\s+/g, '');
           
-          // 지능형 교과군 분류 가속: 예외 과목(기타군) 최우선 판별로 O(n) 연산 최소화
+          // // Ñepyrũ '기타' rehe pya'eve haguã
           let finalGroup = '기타';
           const isOther = cachedOtherCat.keywords.some(k => rawSubjNameForMatch.includes(k));
           
@@ -1265,7 +1266,7 @@ const App = () => {
     }]);
   }, []);
 
-  // --- 단위수 0 또는 잘못된 데이터에 의한 NaN(계산 불가) 에러 방지 강화 ---
+  // // --- Ñemboheko NaN ojejoko haguã ---
   const analysis = useMemo(() => {
     const normalizeStr = (str) => String(str || '').replace(/\s+/g, '');
     const isMatchSem = (gSem, targetSem) => normalizeStr(gSem) === normalizeStr(targetSem);
@@ -1425,7 +1426,7 @@ const App = () => {
             </div>
           </div>
         ) : (
-          <div className="space-y-12 pb-24">
+          <div className="space-y-12 pb-24 print:pb-0 print:space-y-8 print:pt-4">
             <div className="flex justify-end print:hidden">
               <button 
                 onClick={handlePrint}
@@ -1436,9 +1437,9 @@ const App = () => {
               </button>
             </div>
 
-            <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 overflow-hidden print:shadow-none print:border-slate-300">
+            <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 overflow-hidden print:shadow-xl print:border-slate-200 print:break-inside-avoid">
                 <div className="p-8 border-b border-slate-100 flex items-center gap-4 bg-white">
-                    <div className="p-3 bg-blue-50 rounded-2xl print:hidden">
+                    <div className="p-3 bg-blue-50 rounded-2xl">
                         <TableIcon className="text-blue-600" size={24} />
                     </div>
                     <h2 className="text-2xl font-black text-slate-800">내신성적 정밀 분석표 (학기별)</h2>
@@ -1465,9 +1466,9 @@ const App = () => {
                 </div>
             </div>
 
-            <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 overflow-hidden print:shadow-none print:border-slate-300">
+            <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 overflow-hidden print:shadow-xl print:border-slate-200 print:break-inside-avoid">
                 <div className="p-8 border-b border-slate-100 flex items-center gap-4 bg-white">
-                    <div className="p-3 bg-indigo-50 rounded-2xl print:hidden">
+                    <div className="p-3 bg-indigo-50 rounded-2xl">
                         <Layers className="text-indigo-600" size={24} />
                     </div>
                     <h2 className="text-2xl font-black text-slate-800">내신성적 정밀 분석표 (학년별)</h2>
@@ -1503,27 +1504,27 @@ const App = () => {
       {/* 프린트 스타일 */}
       <style>{`
         @page {
-          size: A4;
-          margin: 1.5cm;
+          size: A4 portrait;
+          margin: 12mm;
         }
         @media print {
-          body { 
-            background: white !important; 
-            padding: 0 !important;
-            margin: 0 !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
+          html, body { 
+            background-color: #f8fafc !important; /* 화면과 동일한 부드러운 그레이톤 배경 유지 */
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
-          header { margin-bottom: 20px !important; }
+          .min-h-screen { 
+            background-color: #f8fafc !important; 
+          }
+          /* A4 한 장에 테이블이 완벽히 들어가도록 여백 및 스케일 동적 조정 */
           main { 
             max-width: 100% !important; 
             padding: 0 !important;
-            margin: 0 !important;
+            margin: 0 auto !important;
+            zoom: 0.95; /* 한 페이지 인쇄 최적화 비율 */
           }
-          .min-h-screen { background: white !important; }
-          table { width: 100% !important; border: 1px solid #e2e8f0 !important; }
-          th, td { border: 1px solid #e2e8f0 !important; color: black !important; }
-          .bg-slate-900, .bg-blue-600, .bg-indigo-600 { color: black !important; background: transparent !important; }
+          /* 표 데이터에만 시선이 집중되도록 상단 타이틀 숨김 처리 */
+          header { display: none !important; }
           .print\\:hidden { display: none !important; }
         }
       `}</style>
