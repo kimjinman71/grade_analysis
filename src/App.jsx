@@ -773,25 +773,34 @@
 
 
 
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+mport React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { 
   Plus, 
   Trash2, 
+  BarChart3, 
+  Calculator, 
+  BookOpen, 
   GraduationCap, 
+  TrendingUp, 
+  Download,
+  Info,
   FileUp, 
   Loader2, 
   CheckCircle2, 
   AlertCircle, 
+  Hash, 
+  Trophy, 
+  Users, 
+  Award, 
+  Percent, 
   Layers, 
   Lock, 
   Key, 
   ShieldCheck, 
-  Table as TableIcon,
-  Printer
+  Table as TableIcon
 } from 'lucide-react';
 
 // --- 시스템 구성 상수 ---
-// (실행 환경 오류를 방지하기 위해 정적 변수로 안전하게 처리되었습니다.)
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY; 
 const MODEL_NAME = "gemini-2.5-flash";
 
@@ -807,18 +816,18 @@ const SEMESTERS = [
 const YEARS = ['1학년', '2학년', '3학년'];
 
 const SUBJECT_CATEGORIES = [
-  { id: '국어', name: '국어', keywords: ['국어', '문학', '독서', '화법', '언어', '매체', '고전'], exclusions: ['중국어', '일본어', '외국어', '프랑스어', '스페인어', '독일어'] },
+  { id: '국어', name: '국어', keywords: ['국어', '문학', '독서', '화법', '언어', '매체', '고전'], exclusions: ['중국어', '일본어', '외국어'] },
   { id: '수학', name: '수학', keywords: ['수학', '대수', '미적', '확률', '기하', '통계', '해석'], exclusions: [] },
   { id: '영어', name: '영어', keywords: ['영어', '영미', '독해', '회화', '심화영어'], exclusions: [] },
   { id: '사회', name: '사회', keywords: ['사회', '윤리', '지리', '역사', '경제', '정치', '법', '세계사', '동아시아'], exclusions: [] },
   { id: '과학', name: '과학', keywords: ['과학', '물리', '화학', '생명', '지구', '융합'], exclusions: [] },
   { id: '한국사', name: '한국사', keywords: ['한국사'], exclusions: [] },
-  { id: '기타', name: '기타', keywords: ['중국어', '일본어', '한문', '제2외국어', '정보', '기술', '가정', '체육', '음악', '미술', '프랑스어', '독일어', '스페인어', '러시아어', '아랍어', '베트남어'], exclusions: [] }
+  { id: '기타', name: '기타', keywords: ['중국어', '일본어', '한문', '제2외국어', '정보', '기술', '가정', '체육', '음악', '미술'], exclusions: [] }
 ];
 
 const ACHIEVEMENTS = ['A', 'B', 'C', 'D', 'E'];
 
-// --- Utility: 데이터 분석 해상도 최적화 (초정밀 파싱을 위한 무손실급 스캔 및 명암비 최적화) ---
+// --- Utility: 파일 전처리 및 데이터 분석 해상도 최적화 ---
 const optimizeFile = async (file) => {
   if (file.type === "application/pdf") {
     return new Promise((resolve, reject) => {
@@ -837,9 +846,7 @@ const optimizeFile = async (file) => {
       img.src = e.target.result;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        
-        // 정밀도 절대 극대화: 3500px 해상도를 유지하여 작은 소수점(.)과 숫자의 곡선을 완벽히 보존
-        const MAX_WIDTH = 3500; 
+        const MAX_WIDTH = 2500; 
         let width = img.width;
         let height = img.height;
         if (width > MAX_WIDTH) {
@@ -848,21 +855,11 @@ const optimizeFile = async (file) => {
         }
         canvas.width = width;
         canvas.height = height;
-        
-        // 투명도 비활성화로 렌더링 성능 극대화 및 노이즈 차단
-        const ctx = canvas.getContext('2d', { alpha: false });
-        
-        // 아주 미세한 소수점이 날아가지 않도록, 먹선(잉크)을 뚜렷하게 잡는 최적의 명암비 및 밝기 튜닝
-        ctx.filter = 'contrast(1.25) grayscale(100%) brightness(0.95)';
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, width, height);
-        
+        const ctx = canvas.getContext('2d');
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
-        
-        // 무손실 압축(PNG) 적용: JPEG 손실로 인한 뭉개짐을 완벽히 차단하여 정확도 100% 지향
-        resolve({ data: canvas.toDataURL('image/png').split(',')[1], mimeType: "image/png" });
+        resolve({ data: canvas.toDataURL('image/jpeg', 0.95).split(',')[1], mimeType: "image/jpeg" });
       };
     };
   });
@@ -1014,21 +1011,17 @@ const App = () => {
   const [uploadStatus, setUploadStatus] = useState({ type: '', message: '' });
   const fileInputRef = useRef(null);
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   const handleAuth = (e) => {
     e?.preventDefault();
     if (VALID_PASSWORDS.includes(passwordInput.toLowerCase())) {
       setIsAuthenticated(true);
       setAuthError('');
     } else {
-      setAuthError('유효하지 않은 보안 코드입니다. 보안 코드를 확인해 주세요.');
+      setAuthError('유효하지 않은 보안 코드입니다. 전문가용 코드를 확인해 주세요.');
     }
   };
 
-  // --- 초정밀 입시 성적표 파싱 및 데이터 맵핑 엔진 (정확도 완벽 보장 버전) ---
+  // --- 차세대 지능형 성적표 파싱 및 정밀 시맨틱 매핑 엔진 ---
   const analyzeFile = async (file) => {
     setIsAnalyzing(true);
     setUploadStatus({ type: 'info', message: '데이터 분석 시스템이 정밀 해독 중입니다...' });
@@ -1036,29 +1029,25 @@ const App = () => {
     try {
       const { data: base64Data, mimeType } = await optimizeFile(file);
       
-      // AI가 성적표 구조를 명확히 인지하고 사소한 실수도 범하지 않도록 입시 전문가용 초정밀 프롬프트 적용
-      const systemPrompt = `당신은 대한민국 대학 입시 및 고등학교 나이스(NEIS) 성적표 데이터 추출을 위한 최고 수준의 비전 AI입니다.
-이미지 내의 성적 표(Table) 데이터를 단 하나의 오차(특히 소수점)나 누락 없이 완벽하게 추출하여 JSON 배열로 반환하십시오.
+      const systemInstruction = `당신은 대한민국 고등학교 성적표(나이스 성적통지표) 분석 전문가입니다.
+      첨부된 파일에서 성적 데이터를 전수 추출하여 JSON으로 반환하십시오.
+      
+      [데이터 추출 및 매핑 중요 규칙]
+      1. 교과 분류 예외 처리: '중국어', '일본어', '프랑스어' 등 모든 외국어(어문) 교과는 '국어' 교과가 아닌 '기타' 교과(제2외국어)로 분류하십시오. '국어'는 오직 한국어 관련 교과만 해당합니다.
+      2. 구조적 해독: 이미지 내 표(Table)의 행(Row) 관계를 파악하여 학기, 과목, 단위수, 원점수, 평균, 성취도, 석차등급을 한 쌍으로 묶으십시오.
+      3. 수치 정규화: 모든 텍스트 단위를 완전히 제거하고 순수 숫자(Number)로만 출력하십시오.
+      4. 등급(grade) 판정: 석차등급 칸에 숫자 1~9가 기재된 경우만 숫자로, 'P', '.', '-', '공란' 등 미산출 과목은 반드시 null로 출력하십시오.
+      5. 학기 정규화: '1학년 1학기'와 같이 시스템 표준 명칭으로 통일하십시오.
+      6. A, B, C, D, E 성취도 비율분석에 해당하는 숫자를 정확하게 파싱을 해서 정확하게 매핑해주세요.
+      7. 업로드된 파일에서 모든 데이터를 정확하게 파싱하고, 분석 및 파싱 속도를 가속화 해주세요.
+      8. 정확한 파싱과 고속화된 파싱된 데이터를 정확하게 맵핑해주세요.
+      9. 누락 방지: 파일에 존재하는 모든 학년, 모든 학기의 성적을 단 하나도 빠짐없이 grades 배열에 담으십시오.`;
 
-[초정밀 데이터 추출 및 검증 10계명]
-1. 해독 최우선순위(소수점 및 유사 숫자): 원점수, 과목평균, 성취도별 분포비율(A~E)에 포함된 '소수점(.)'을 절대 누락하지 마십시오. 8과 0, 3과 9, 1과 7 등의 숫자 오인식에 극도로 주의하십시오.
-2. 빈칸 및 하이픈 처리: 데이터가 없는 빈칸이나 가로줄('-')은 무조건 숫자 0으로 치환하십시오.
-3. 과목명 정규화: 과목명 내부의 모든 띄어쓰기는 완전히 제거하여 추출하십시오. (예: "심 화 국 어" -> "심화국어")
-4. 교과 분류 예외(필수): '중국어, 일본어, 프랑스어, 스페인어, 독일어, 러시아어, 아랍어, 베트남어, 한문' 등 모든 외국어 및 한문 교과는 무조건 '기타'로 분류하십시오. (국어 아님)
-5. 석차등급(grade) 엄격화: 석차등급 칸에 1~9 사이의 명시적인 '숫자'가 있을 때만 정수로 추출하십시오. 'P', '.', '-', 공란 등 숫자가 아닌 모든 값은 무조건 null로 처리하십시오.
-6. 성취도 비율(distA~E): A부터 E까지 5개의 분포 비율 숫자를 찾아 각각 distA, distB, distC, distD, distE 필드에 정확히 매핑하십시오. 빈칸이나 '-'는 0으로 치환하십시오.
-7. 수치 데이터 클렌징: %, 명, 점 등의 기호와 단위는 완전히 제거하고 순수 숫자(Number) 타입으로만 추출하십시오.
-8. 학기 정규화: 표의 헤더를 판독하여 반드시 "N학년 N학기" 형식의 텍스트로 통일하십시오.
-9. 전수 조사 및 구조 파악: 교과 성적 표의 열(Column) 헤더를 먼저 판독하여 각 숫자가 의미하는 바를 교차 검증한 후, 1학년부터 3학년까지 이미지에 존재하는 모든 행을 단 하나도 빠짐없이 1개의 배열에 추출하십시오.
-10. 출력 제약: 오직 지정된 JSON Schema 구조만을 따르며, 마크다운이나 추가 설명 없이 순수한 JSON 문자열만 출력하십시오.`;
-
-      const prompt = "성적표 이미지를 초정밀 스캔하여 지정된 입시 전문가용 JSON 규격에 맞춰 100% 정확하게 전수 추출하십시오.";
+      const prompt = "성적표 이미지 내 중국어 등 예외 교과 분류를 포함한 모든 데이터를 입시 전문가용 규격에 맞춰 전수 추출하십시오.";
 
       const generationConfig = {
-        // Temperature를 0.0으로 고정하여 AI 모델의 창의성을 배제하고 기계적으로 가장 높은 정확도의 추출치 보장
-        temperature: 0.0, 
+        temperature: 0.1, 
         topK: 1,
-        // 성적표 데이터가 길 경우 응답 데이터가 잘리는 현상(Truncation)을 막기 위해 토큰 용량을 15000으로 여유있게 할당
         maxOutputTokens: 15000, 
         responseMimeType: "application/json",
         responseSchema: {
@@ -1094,7 +1083,7 @@ const App = () => {
 
       const payload = {
         contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: mimeType, data: base64Data } }] }],
-        systemInstruction: { parts: [{ text: systemPrompt }] },
+        systemInstruction: { parts: [{ text: systemInstruction }] },
         generationConfig: generationConfig
       };
 
@@ -1106,7 +1095,7 @@ const App = () => {
         });
         
         if (!response.ok) {
-          if (retries < 3) {
+          if (retries < 5) {
             const delay = Math.pow(2, retries) * 1000;
             await new Promise(res => setTimeout(res, delay));
             return callApiWithRetry(retries + 1);
@@ -1121,15 +1110,13 @@ const App = () => {
       
       if (!rawText) throw new Error('추출된 데이터 응답이 비어 있습니다.');
       
-      // JSON 파싱 안정성 처리
-      let cleanedText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      let cleanedText = rawText.trim().replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim();
 
       let rawGrades = [];
       try {
         const parsedData = JSON.parse(cleanedText);
         rawGrades = parsedData.grades || [];
       } catch (e) {
-        console.warn("JSON Parse Error, Running High-Speed Regex Recovery...");
         const objectPattern = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g;
         const matches = cleanedText.match(objectPattern);
         if (matches) {
@@ -1145,31 +1132,11 @@ const App = () => {
       }
 
       if (rawGrades.length > 0) {
-        // --- 고속 정밀 시맨틱 매핑 엔진 ---
-        const cachedOtherCat = SUBJECT_CATEGORIES.find(c => c.id === '기타');
-
+        // --- 강화된 지능형 시맨틱 매핑 및 입시 데이터 정규화 엔진 ---
         const mappedGrades = rawGrades.map((item, index) => {
-          // 프론트엔드 수치 방어벽(Sanitization) 극한 강화: AI가 괄호나 공백, 특수문자를 혼동해도 100% 퓨어 실수로 교정
           const parseSafeNum = (val, def = 0) => {
-            if (val === null || val === undefined || val === '' || val === '-' || val === '.' || String(val).trim().toUpperCase() === 'P') return def;
-            
-            // 쉼표를 소수점으로 변환하고 띄어쓰기 등 공백 노이즈 제거
-            let strVal = String(val).replace(/,/g, '.').replace(/\s+/g, '');
-            
-            // 괄호 및 괄호 안의 모든 내용(주로 표준편차) 강제 삭제
-            strVal = strVal.replace(/\([^)]*\)/g, '');
-            
-            // 숫자와 소수점 이외의 문자 필터링
-            let clean = strVal.replace(/[^0-9.]/g, '');
-            
-            if (clean === '') return def;
-
-            // 소수점 2중 인식 노이즈 방어 및 1개의 실수(Float)로 완벽 교정 (예: 12.3.4 -> 12.34)
-            const parts = clean.split('.');
-            if (parts.length > 2) {
-              clean = parts[0] + '.' + parts.slice(1).join('');
-            }
-            
+            if (val === null || val === undefined) return def;
+            const clean = String(val).replace(/[^0-9.-]/g, '');
             const num = parseFloat(clean);
             return isNaN(num) ? def : num;
           };
@@ -1183,22 +1150,22 @@ const App = () => {
           }
 
           let subjName = String(item.name || '').trim();
-          let rawSubjNameForMatch = subjName.replace(/\s+/g, '');
-          let grp = String(item.group || '').replace(/\s+/g, '');
+          let grp = String(item.group || '').trim();
+          
+          // 지능형 교과군 분류 (Heuristic Priority Mapping)
+          const otherCat = SUBJECT_CATEGORIES.find(c => c.id === '기타');
+          const isOther = otherCat.keywords.some(k => subjName.includes(k));
           
           let finalGroup = '기타';
-          const isOther = cachedOtherCat.keywords.some(k => rawSubjNameForMatch.includes(k));
-          
-          if (!isOther) {
-            for (let i = 0; i < SUBJECT_CATEGORIES.length; i++) {
-              const cat = SUBJECT_CATEGORIES[i];
-              if (cat.id === '기타') continue;
-              if (!cat.exclusions.some(ex => rawSubjNameForMatch.includes(ex)) && 
-                  (cat.keywords.some(k => rawSubjNameForMatch.includes(k) || grp.includes(k)))) {
-                finalGroup = cat.id;
-                break;
-              }
-            }
+          if (isOther) {
+            finalGroup = '기타';
+          } else {
+            const matchedCategory = SUBJECT_CATEGORIES.find(c => 
+              c.id !== '기타' && 
+              c.keywords.some(k => subjName.includes(k) || grp.includes(k)) &&
+              !c.exclusions.some(ex => subjName.includes(ex))
+            );
+            finalGroup = matchedCategory ? matchedCategory.id : '기타';
           }
 
           let gVal = item.grade;
@@ -1235,7 +1202,7 @@ const App = () => {
         });
 
         setGrades(mappedGrades);
-        setUploadStatus({ type: 'success', message: `데이터 정밀 분석 완료: ${mappedGrades.length}개의 데이터가 정확하게 연동되었습니다.` });
+        setUploadStatus({ type: 'success', message: `분석 완료: ${mappedGrades.length}개의 데이터가 전문가 리포트에 정밀 연동되었습니다.` });
       } else {
         throw new Error('성적표 양식을 인식할 수 없습니다. 더 선명한 파일을 업로드해 주세요.');
       }
@@ -1249,7 +1216,7 @@ const App = () => {
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
-    const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"];
+    const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
     if (file && allowedTypes.includes(file.type)) {
       analyzeFile(file);
     } else if (file) {
@@ -1305,9 +1272,9 @@ const App = () => {
       if (!items || items.length === 0) return "-";
       let totalCredits = 0, weightedSum = 0, validCount = 0;
       for (const item of items) {
-          const c = parseFloat(item.credits);
-          const g = parseFloat(item.grade);
-          if (!isNaN(c) && !isNaN(g) && c > 0 && g >= 1 && g <= 9) {
+          const c = parseFloat(item.credits) || 0;
+          const g = parseFloat(item.grade) || 0;
+          if (c > 0 && g >= 1 && g <= 9) {
               totalCredits += c;
               weightedSum += (c * g);
               validCount++;
@@ -1359,7 +1326,7 @@ const App = () => {
               <div className="relative">
                 <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input 
-                  type="password"
+                  type="text"
                   placeholder="보안 코드 입력"
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
@@ -1422,7 +1389,7 @@ const App = () => {
                         </p>
                     </div>
                     <div className="flex flex-col items-center gap-4 shrink-0">
-                        <input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" onChange={handleFileUpload} ref={fileInputRef} className="hidden" />
+                        <input type="file" accept="application/pdf,image/png,image/jpeg" onChange={handleFileUpload} ref={fileInputRef} className="hidden" />
                         <button 
                             disabled={isAnalyzing}
                             onClick={() => fileInputRef.current?.click()}
@@ -1452,18 +1419,8 @@ const App = () => {
             </div>
           </div>
         ) : (
-          <div className="space-y-12 pb-24 print:pb-0 print:space-y-8 print:pt-4">
-            <div className="flex justify-end print:hidden">
-              <button 
-                onClick={handlePrint}
-                className="flex items-center gap-3 bg-slate-800 text-white px-8 py-4 rounded-2xl font-black shadow-lg hover:bg-slate-700 transition-all active:scale-95 group"
-              >
-                <Printer size={22} className="group-hover:animate-pulse" /> 
-                정밀 리포트 출력
-              </button>
-            </div>
-
-            <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 overflow-hidden print:shadow-xl print:border-slate-200 print:break-inside-avoid">
+          <div className="space-y-12 pb-24">
+            <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 overflow-hidden print:shadow-none print:border-slate-300">
                 <div className="p-8 border-b border-slate-100 flex items-center gap-4 bg-white">
                     <div className="p-3 bg-blue-50 rounded-2xl print:hidden">
                         <TableIcon className="text-blue-600" size={24} />
@@ -1492,7 +1449,7 @@ const App = () => {
                 </div>
             </div>
 
-            <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 overflow-hidden print:shadow-xl print:border-slate-200 print:break-inside-avoid">
+            <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 overflow-hidden print:shadow-none print:border-slate-300">
                 <div className="p-8 border-b border-slate-100 flex items-center gap-4 bg-white">
                     <div className="p-3 bg-indigo-50 rounded-2xl print:hidden">
                         <Layers className="text-indigo-600" size={24} />
@@ -1526,35 +1483,6 @@ const App = () => {
       <footer className="max-w-[1450px] mx-auto mt-20 py-10 border-t border-slate-200 text-center text-slate-400 text-sm font-bold print:hidden">
         &copy; Admissions Data IpsiSketch Lab. All Rights Reserved.
       </footer>
-      
-      {/* 프린트 스타일 */}
-      <style>{`
-        @page {
-          size: A4 portrait;
-          margin: 12mm;
-        }
-        @media print {
-          html, body { 
-            background-color: #f8fafc !important; /* 화면과 동일한 부드러운 그레이톤 배경 유지 */
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          header { margin-bottom: 20px !important; }
-          main { 
-            max-width: 100% !important; 
-            padding: 0 !important;
-            margin: 0 auto !important;
-            zoom: 0.95; /* 한 페이지 인쇄 최적화 비율 */
-          }
-          .min-h-screen { 
-            background-color: #f8fafc !important; 
-          }
-          table { width: 100% !important; border: 1px solid #e2e8f0 !important; }
-          th, td { border: 1px solid #e2e8f0 !important; color: black !important; }
-          .bg-slate-900, .bg-blue-600, .bg-indigo-600 { color: black !important; background: transparent !important; }
-          .print\\:hidden { display: none !important; }
-        }
-      `}</style>
     </div>
   );
 };
