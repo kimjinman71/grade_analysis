@@ -755,6 +755,20 @@ const App = () => {
       
       {/* 프린트 스타일 */}
        <style>{`
+       @media print {
+        /* 문서 최상단(body)에 가상 요소로 제목 삽입 */
+        body::before {
+          content: "내신 성적 분석표"; /* 출력될 제목 내용 */
+          display: block;
+          text-align: center;
+          font-size: 20pt;
+          font-weight: bold;
+          color: #0f172a;
+          margin-bottom: 20px;
+          padding-bottom: 10px;
+          border-bottom: 3px double #94a3b8; /* 전문가적인 느낌을 주는 이중선 */
+        }
+
         @page {
           size: A4 portrait;
           margin: 15mm;
