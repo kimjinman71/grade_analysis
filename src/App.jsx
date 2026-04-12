@@ -621,9 +621,9 @@ const App = () => {
         <div>
           <h1 className="text-3xl font-extrabold text-slate-800 flex items-center gap-3">
             <GraduationCap className="text-blue-600" size={36} />
-            내신 성적 정밀 분석 시스템
+            내신성적 정밀분석 시스템
           </h1>
-          <p className="text-slate-500 mt-1 font-medium ml-1">내신 성적 분석 엔진 및 정밀 리포트</p>
+          <p className="text-slate-500 mt-1 font-medium ml-1">내신성적 분석 엔진 및 정밀 리포트</p>
         </div>
         <div className="flex bg-white rounded-2xl p-1 shadow-sm border border-slate-200 print:hidden">
           <button onClick={() => setActiveTab('input')} className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'input' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400 hover:text-slate-600'}`}>데이터 입력</button>
@@ -758,7 +758,7 @@ const App = () => {
        @media print {
         /* 문서 최상단(body)에 가상 요소로 제목 삽입 */
         body::before {
-          content: "내신 성적 분석표"; /* 출력될 제목 내용 */
+          content: "내신성적 분석표"; /* 출력될 제목 내용 */
           display: block;
           text-align: center;
           font-size: 20pt;
