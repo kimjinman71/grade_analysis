@@ -252,7 +252,7 @@ const App = () => {
   // // --- AI ñehesa'ỹijo pya'e ha hekopete (Pya'eve ha hesakãve) ---
   const analyzeFile = async (file) => {
     setIsAnalyzing(true);
-    setUploadStatus({ type: 'info', message: '데이터 분석 시스템이 초고속 정밀 해독 중입니다...' });
+    setUploadStatus({ type: 'info', message: '데이터 분석 시스템이 정밀 해독 중입니다...' });
 
     try {
       const { data: base64Data, mimeType } = await optimizeFile(file);
@@ -670,7 +670,7 @@ const App = () => {
             <div className="space-y-10">
               <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3 ml-2">
                 <Layers className="text-blue-600" size={28} />
-                교과 성적 데이터 관리
+                교과성적 데이터 관리
               </h2>
               <TableSection title="상대평가 (석차등급)" type="relative" mode="basic" grades={grades.filter(g => g.type === 'relative')} updateRow={updateRow} removeRow={removeRow} addRow={addRow} />
               <TableSection title="절대평가 (성취도)" type="absolute" mode="basic" grades={grades.filter(g => g.type === 'absolute')} updateRow={updateRow} removeRow={removeRow} addRow={addRow} />
